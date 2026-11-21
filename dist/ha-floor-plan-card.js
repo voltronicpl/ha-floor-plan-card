@@ -13,7 +13,23 @@
  *   drzwi2: cover.drzwi_2
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
+
+// Encje z HA Miśka. Używane, gdy w konfiguracji karty nie podasz rooms/covers.
+// Każdą można nadpisać w YAML-u karty.
+const DEFAULT_ROOMS = {
+  garaz:     { light: "switch.wylacznik_swiatlo_garaz", temperature: "sensor.garaz_czujnik_temp_temperature" },
+  warsztat:  { light: "light.pokoj_druk" },
+  salon:     { light: "light.salon_swiatlo_wszystkie_grupa", temperature: "sensor.czujnik_temperatury_salon_temperature" },
+  sypialnia: { light: "light.sypialnia_swiatlo_grupa" },
+  lazienka:  { light: "light.lazienka_swiatlo" },
+  kuchnia:   { light: "light.kuchnia_swiatlo_grupa" },
+  korytarz:  { light: "light.swiatlo_korytarz_wjsxie" },
+  garderoba: { light: "light.garderoba_swiatlo" },
+};
+const DEFAULT_COVERS = {
+  drzwi2: "binary_sensor.czujnik_drzwi_glowne_contact",
+};
 
 // Domyślne pozycje ikon (w % obrazka 1933x814) i nazwy pokoi.
 const ROOMS = {
@@ -42,14 +58,14 @@ const NO_ACTION = { action: "none" };
 function buildPictureElements(config) {
   const base = (config.base_path || "/hacsfiles/ha-floor-plan-card").replace(/\/$/, "");
   const img = (n) => `${base}/${n}.png`;
-  const rooms = config.rooms || {};
-  const covers = config.covers || {};
+  const rooms = { ...DEFAULT_ROOMS, ...(config.rooms || {}) };
+  const covers = { ...DEFAULT_COVERS, ...(config.covers || {}) };
   const overlays = [];
   const controls = [];
 
   for (const [key, def] of Object.entries(ROOMS)) {
     const room = rooms[key];
-    if (!room) continue;
+    if (!room) continue; // rooms.<pokój>: false chowa pokój
     const left = room.left ?? def.left;
     const top = room.top ?? def.top;
     if (room.light) {
@@ -93,6 +109,8 @@ function buildPictureElements(config) {
   for (const [key, def] of Object.entries(COVERS)) {
     const entity = covers[key];
     if (!entity) continue;
+    // binary_sensor (czujnik drzwi): on = otwarte, kliknięcie pokazuje tylko szczegóły
+    const isSensor = entity.startsWith("binary_sensor.");
     overlays.push({
       type: "image",
       entity,
@@ -100,6 +118,7 @@ function buildPictureElements(config) {
       state_image: {
         open: img(def.open), opening: img(def.open),
         closing: img(def.closed), closed: img(def.closed),
+        on: img(def.open), off: img(def.closed),
       },
       tap_action: NO_ACTION,
       hold_action: NO_ACTION,
@@ -110,7 +129,7 @@ function buildPictureElements(config) {
       entity,
       title: def.name,
       state_color: true,
-      tap_action: { action: "toggle" },
+      tap_action: isSensor ? { action: "more-info" } : { action: "toggle" },
       hold_action: { action: "more-info" },
       style: {
         left: `${def.left}%`, top: `${def.top}%`,
@@ -154,10 +173,7 @@ class HaFloorPlanCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return {
-      rooms: { salon: { light: "light.salon", temperature: "sensor.temperatura_salon" } },
-      covers: { brama: "cover.brama_garazowa" },
-    };
+    return {};
   }
 }
 
