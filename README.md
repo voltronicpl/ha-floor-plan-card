@@ -14,12 +14,15 @@ brama garażowa i drzwi pokazują, czy są otwarte. Kliknięcie ikony przełącz
 4. Odśwież przeglądarkę (Ctrl+F5).
 5. Dodaj kartę do dashboardu (YAML poniżej).
 
-HACS sam dodaje zasób `/hacsfiles/ha-floor-plan-card/ha-floor-plan-card.js`.
-Obrazki leżą w `dist/`, więc trafiają do `/hacsfiles/ha-floor-plan-card/`.
+HACS sam pobiera kartę i wszystkie obrazki z `dist/` do
+`/hacsfiles/ha-floor-plan-card/` i sam dodaje zasób JS. Niczego nie trzeba
+rozpakowywać ani kopiować do `/config/www/`.
 
-**Jeśli mapa się nie wyświetla** (HACS nie skopiował obrazków), rozpakuj
-`examples/mapa_www.zip` do `/config/www/` (powstanie `/config/www/mapa/`)
-i dodaj do karty `base_path: /local/mapa`.
+Najkrótsza karta (encje są już wpisane w kartę jako domyślne):
+
+```yaml
+type: custom:ha-floor-plan-card
+```
 
 ## Instalacja ręczna
 
@@ -28,6 +31,26 @@ i dodaj do karty `base_path: /local/mapa`.
 3. W karcie ustaw `base_path: /local/mapa`.
 
 ## Konfiguracja karty
+
+Domyślne encje (wbudowane w kartę, każdą można nadpisać):
+
+| Pokój | Światło | Temperatura |
+|---|---|---|
+| garaz | `switch.wylacznik_swiatlo_garaz` | `sensor.garaz_czujnik_temp_temperature` |
+| warsztat | `light.pokoj_druk` | – |
+| salon | `light.salon_swiatlo_wszystkie_grupa` | `sensor.czujnik_temperatury_salon_temperature` |
+| sypialnia | `light.sypialnia_swiatlo_grupa` | – |
+| lazienka | `light.lazienka_swiatlo` | – |
+| kuchnia | `light.kuchnia_swiatlo_grupa` | – |
+| korytarz | `light.swiatlo_korytarz_wjsxie` | – |
+| garderoba | `light.garderoba_swiatlo` | – |
+| drzwi2 | `binary_sensor.czujnik_drzwi_glowne_contact` | – |
+
+Biuro, siłownia, pralnia/WC, brama i drzwi 1 nie mają jeszcze encji. Dopisz je w YAML-u, gdy będą.
+Pokój schowasz, wpisując `salon: false`. Drzwi i bramę można podać jako `cover.*` (klik otwiera)
+albo `binary_sensor.*` (czujnik, klik pokazuje szczegóły).
+
+Przykład nadpisania:
 
 ```yaml
 type: custom:ha-floor-plan-card
