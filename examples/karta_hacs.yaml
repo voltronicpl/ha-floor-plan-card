@@ -1,0 +1,19 @@
+# Karta po instalacji z HACS. Podmień encje na swoje, pokoje bez encji po prostu usuń.
+type: custom:ha-floor-plan-card
+# base_path: /local/mapa   # odkomentuj, jeśli obrazki wrzuciłeś ręcznie do /config/www/mapa/
+rooms:
+  garaz:      { light: light.PLACEHOLDER_garaz,      temperature: sensor.PLACEHOLDER_temperatura_garaz }
+  warsztat:   { light: light.PLACEHOLDER_warsztat,   temperature: sensor.PLACEHOLDER_temperatura_warsztat }
+  salon:      { light: light.PLACEHOLDER_salon,      temperature: sensor.PLACEHOLDER_temperatura_salon }
+  biuro:      { light: light.PLACEHOLDER_biuro,      temperature: sensor.PLACEHOLDER_temperatura_biuro }
+  sypialnia:  { light: light.PLACEHOLDER_sypialnia,  temperature: sensor.PLACEHOLDER_temperatura_sypialnia }
+  silownia:   { light: light.PLACEHOLDER_silownia,   temperature: sensor.PLACEHOLDER_temperatura_silownia }
+  lazienka:   { light: light.PLACEHOLDER_lazienka,   temperature: sensor.PLACEHOLDER_temperatura_lazienka }
+  kuchnia:    { light: light.PLACEHOLDER_kuchnia,    temperature: sensor.PLACEHOLDER_temperatura_kuchnia }
+  korytarz:   { light: light.PLACEHOLDER_korytarz }
+  garderoba:  { light: light.PLACEHOLDER_garderoba }
+  pralnia_wc: { light: light.PLACEHOLDER_pralnia_wc, temperature: sensor.PLACEHOLDER_temperatura_pralnia_wc }
+covers:
+  brama:  cover.PLACEHOLDER_brama_garazowa
+  drzwi1: cover.PLACEHOLDER_drzwi_wejsciowe_1
+  drzwi2: cover.PLACEHOLDER_drzwi_wejsciowe_2

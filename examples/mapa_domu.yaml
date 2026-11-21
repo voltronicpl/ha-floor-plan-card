@@ -1,0 +1,558 @@
+# Karta: Mapa domu (picture-elements)
+# Wrzuć całą zawartość folderu www/mapa/ (albo rozpakuj mapa_www.zip) do /config/www/mapa/  ->  w HA: /local/mapa/...
+# Wszystko z PLACEHOLDER_ podmień na swoje encje.
+type: picture-elements
+image: /local/mapa/plan_domu_noc.png
+elements:
+  # ==== WARSTWY STANU (pod ikonami, nie łapią kliknięć) ====
+  # Światło: włączone = pokój rozjaśniony, wyłączone = ciemno (nocne tło)
+  - type: image
+    entity: light.PLACEHOLDER_garaz
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_garaz.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_warsztat
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_warsztat.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_salon
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_salon.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_biuro
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_biuro.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_sypialnia
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_sypialnia.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_silownia
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_silownia.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_lazienka
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_lazienka.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_kuchnia
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_kuchnia.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_korytarz
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_korytarz.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_garderoba
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_garderoba.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: light.PLACEHOLDER_pralnia_wc
+    image: /local/mapa/pusty.png
+    state_image:
+      "on": /local/mapa/swiatlo_pralnia_wc.png
+      "off": /local/mapa/pusty.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  # Brama i drzwi: otwarte = dziura + odsunięte skrzydło, zamknięte = zamknięte
+  - type: image
+    entity: cover.PLACEHOLDER_brama_garazowa
+    image: /local/mapa/brama_zamknieta.png
+    state_image:
+      open: /local/mapa/brama_otwarta.png
+      opening: /local/mapa/brama_otwarta.png
+      closing: /local/mapa/brama_zamknieta.png
+      closed: /local/mapa/brama_zamknieta.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: cover.PLACEHOLDER_drzwi_wejsciowe_1
+    image: /local/mapa/drzwi1_zamkniete.png
+    state_image:
+      open: /local/mapa/drzwi1_otwarte.png
+      opening: /local/mapa/drzwi1_otwarte.png
+      closing: /local/mapa/drzwi1_zamkniete.png
+      closed: /local/mapa/drzwi1_zamkniete.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  - type: image
+    entity: cover.PLACEHOLDER_drzwi_wejsciowe_2
+    image: /local/mapa/drzwi2_zamkniete.png
+    state_image:
+      open: /local/mapa/drzwi2_otwarte.png
+      opening: /local/mapa/drzwi2_otwarte.png
+      closing: /local/mapa/drzwi2_zamkniete.png
+      closed: /local/mapa/drzwi2_zamkniete.png
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    style:
+      left: 50%
+      top: 50%
+      width: 100%
+      pointer-events: none
+  # ==== IKONY I TEMPERATURY ====
+  # ---- Garaż ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_garaz
+    title: Garaż - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 12%
+      top: 32%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_garaz
+    style:
+      left: 12%
+      top: 39%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Warsztat ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_warsztat
+    title: Warsztat - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 30%
+      top: 15%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_warsztat
+    style:
+      left: 30%
+      top: 22%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Salon ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_salon
+    title: Salon - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 50%
+      top: 24%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_salon
+    style:
+      left: 50%
+      top: 31%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Biuro ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_biuro
+    title: Biuro - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 63%
+      top: 17%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_biuro
+    style:
+      left: 63%
+      top: 24%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Sypialnia ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_sypialnia
+    title: Sypialnia - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 80%
+      top: 15%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_sypialnia
+    style:
+      left: 80%
+      top: 22%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Siłownia ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_silownia
+    title: Siłownia - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 27%
+      top: 58%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_silownia
+    style:
+      left: 27%
+      top: 65%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Łazienka ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_lazienka
+    title: Łazienka - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 37%
+      top: 52%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_lazienka
+    style:
+      left: 37%
+      top: 59%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Kuchnia ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_kuchnia
+    title: Kuchnia - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 50%
+      top: 64%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_kuchnia
+    style:
+      left: 50%
+      top: 71%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Korytarz ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_korytarz
+    title: Korytarz - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 64%
+      top: 57%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  # ---- Garderoba ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_garderoba
+    title: Garderoba - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 72%
+      top: 52%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  # ---- Pralnia / WC ----
+  - type: state-icon
+    entity: light.PLACEHOLDER_pralnia_wc
+    title: Pralnia / WC - światło
+    icon: mdi:lightbulb
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 85%
+      top: 57%
+      background: rgba(0,0,0,0.45)
+      border-radius: 50%
+      padding: 6px
+      --mdc-icon-size: 28px
+  - type: state-label
+    entity: sensor.PLACEHOLDER_temperatura_pralnia_wc
+    style:
+      left: 85%
+      top: 64%
+      color: white
+      font-size: 14px
+      font-weight: bold
+      background: rgba(0,0,0,0.55)
+      border-radius: 8px
+      padding: 2px 6px
+  # ---- Bramy / drzwi (klik = otwórz/zamknij, kolor = stan) ----
+  - type: state-icon
+    entity: cover.PLACEHOLDER_brama_garazowa
+    title: Brama garażowa
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 12%
+      top: 88%
+      background: rgba(0,0,0,0.55)
+      border-radius: 12px
+      padding: 6px
+      --mdc-icon-size: 32px
+  - type: state-icon
+    entity: cover.PLACEHOLDER_drzwi_wejsciowe_1
+    title: Drzwi wejściowe 1
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 21.5%
+      top: 88%
+      background: rgba(0,0,0,0.55)
+      border-radius: 12px
+      padding: 6px
+      --mdc-icon-size: 32px
+  - type: state-icon
+    entity: cover.PLACEHOLDER_drzwi_wejsciowe_2
+    title: Drzwi wejściowe 2
+    state_color: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    style:
+      left: 63.5%
+      top: 88%
+      background: rgba(0,0,0,0.55)
+      border-radius: 12px
+      padding: 6px
+      --mdc-icon-size: 32px
