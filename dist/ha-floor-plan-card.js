@@ -12,9 +12,10 @@
  *   drzwi1: cover.drzwi_1
  *   drzwi2: cover.drzwi_2
  * theme: auto            (domyślnie) | classic | np. zima_noc_poziom
+ * light_icons: false     (domyślnie: sama poświata, bez ikon żarówek)
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 // Encje z HA Miśka. Używane, gdy w konfiguracji karty nie podasz rooms/covers.
 // Każdą można nadpisać w YAML-u karty.
@@ -29,8 +30,19 @@ const DEFAULT_ROOMS = {
   garderoba: { light: "light.garderoba_swiatlo" },
 };
 const DEFAULT_COVERS = {
+  brama:  "binary_sensor.brama",
+  drzwi1: "binary_sensor.czujnik_drzwi_garaz_contact",
   drzwi2: "binary_sensor.czujnik_drzwi_glowne_contact",
 };
+
+// Realistyczna poświata: światło widać jako rozjaśniony pokój z ciepłą łuną.
+// Ikony żarówek są domyślnie niewidoczne, ale dalej da się w nie kliknąć
+// (klik w środek pokoju = włącz/wyłącz). light_icons: true pokazuje je.
+const GLOW_FILTER = "drop-shadow(0 0 14px rgba(255,190,110,0.55)) saturate(1.08)";
+function lightIconStyle(config, base) {
+  if (config.light_icons) return base;
+  return { ...base, opacity: "0", "--mdc-icon-size": "56px", background: "transparent" };
+}
 
 // Domyślne pozycje ikon (w % obrazka 1933x814) i nazwy pokoi.
 const ROOMS = {
@@ -77,7 +89,7 @@ function buildPictureElements(config) {
         state_image: { on: img(`swiatlo_${key}`), off: img("pusty") },
         tap_action: NO_ACTION,
         hold_action: NO_ACTION,
-        style: OVERLAY_STYLE,
+        style: { ...OVERLAY_STYLE, filter: GLOW_FILTER },
       });
       controls.push({
         type: "state-icon",
@@ -87,11 +99,11 @@ function buildPictureElements(config) {
         state_color: true,
         tap_action: { action: "toggle" },
         hold_action: { action: "more-info" },
-        style: {
+        style: lightIconStyle(config, {
           left: `${left}%`, top: `${top}%`,
           background: "rgba(0,0,0,0.45)", "border-radius": "50%", padding: "6px",
           "--mdc-icon-size": "28px",
-        },
+        }),
       });
     }
     if (room.temperature) {
@@ -196,6 +208,9 @@ function boxStyle(box) {
   };
 }
 
+// Zwraca { cfg, layers }: cfg = karta picture-elements (tło, strefy kliknięć, ikony, temperatury),
+// layers = nakładki rysowane przez kartę nad obrazem (poświata świateł, otwarta brama/drzwi),
+// żeby mogły płynnie się rozjaśniać i gasnąć.
 function buildThemed(config, key) {
   const th = THEMES[key];
   const base = (config.base_path || "/hacsfiles/ha-floor-plan-card").replace(/\/$/, "");
@@ -204,8 +219,9 @@ function buildThemed(config, key) {
   const covers = { ...DEFAULT_COVERS, ...(config.covers || {}) };
   const portrait = th.orient === "pion";
   const iconSize = portrait ? "22px" : "28px";
-  const overlays = [];
+  const taps = [];
   const controls = [];
+  const layers = [];
 
   for (const [rk, def] of Object.entries(ROOMS)) {
     const room = rooms[rk];
@@ -215,30 +231,36 @@ function buildThemed(config, key) {
     const [tl, tt] = tr.temp || [il, it + 4];
     if (room.light && tr.light) {
       const b = tr.light.box;
-      const off = emptyImg(b[2] * th.w, b[3] * th.h);
-      overlays.push({
-        type: "image",
-        entity: room.light,
-        image: off,
-        state_image: { on: `${dir}/${tr.light.file}`, off },
-        tap_action: NO_ACTION,
-        hold_action: NO_ACTION,
-        style: boxStyle(b),
-      });
-      controls.push({
-        type: "state-icon",
-        entity: room.light,
-        title: `${room.name || def.name} - światło`,
-        icon: room.icon || "mdi:lightbulb",
-        state_color: true,
-        tap_action: { action: "toggle" },
-        hold_action: { action: "more-info" },
-        style: {
-          left: `${il}%`, top: `${it}%`,
-          background: "rgba(0,0,0,0.45)", "border-radius": "50%", padding: "6px",
-          "--mdc-icon-size": iconSize,
+      layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}`, box: b });
+      // niewidoczna strefa na cały pokój: klik = włącz/wyłącz, przytrzymanie = szczegóły
+      taps.push({
+        area: b[2] * b[3],
+        el: {
+          type: "image",
+          entity: room.light,
+          title: `${room.name || def.name} - światło`,
+          image: emptyImg(b[2] * th.w, b[3] * th.h),
+          tap_action: { action: "toggle" },
+          hold_action: { action: "more-info" },
+          style: { ...boxStyle(b), "pointer-events": "auto", cursor: "pointer" },
         },
       });
+      if (config.light_icons) {
+        controls.push({
+          type: "state-icon",
+          entity: room.light,
+          title: `${room.name || def.name} - światło`,
+          icon: room.icon || "mdi:lightbulb",
+          state_color: true,
+          tap_action: { action: "toggle" },
+          hold_action: { action: "more-info" },
+          style: {
+            left: `${il}%`, top: `${it}%`,
+            background: "rgba(0,0,0,0.45)", "border-radius": "50%", padding: "6px",
+            "--mdc-icon-size": iconSize,
+          },
+        });
+      }
     }
     if (room.temperature) {
       controls.push({
@@ -258,20 +280,7 @@ function buildThemed(config, key) {
     const tc = th.covers && th.covers[ck];
     if (!entity || !tc) continue;
     const isSensor = entity.startsWith("binary_sensor.");
-    if (tc.open) {
-      const b = tc.open.box;
-      const closed = emptyImg(b[2] * th.w, b[3] * th.h);
-      const open = `${dir}/${tc.open.file}`;
-      overlays.push({
-        type: "image",
-        entity,
-        image: closed,
-        state_image: { open, opening: open, on: open, closing: closed, closed, off: closed },
-        tap_action: NO_ACTION,
-        hold_action: NO_ACTION,
-        style: boxStyle(b),
-      });
-    }
+    if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}`, box: tc.open.box });
     controls.push({
       type: "state-icon",
       entity,
@@ -287,11 +296,25 @@ function buildThemed(config, key) {
     });
   }
 
+  // większe strefy pod spodem, mniejsze na wierzchu (np. warsztat wewnątrz prostokąta salonu)
+  taps.sort((a, b) => b.area - a.area);
+
   return {
-    type: "picture-elements",
-    image: `${dir}/${th.bg}`,
-    elements: [...overlays, ...controls, ...(config.extra_elements || [])],
+    cfg: {
+      type: "picture-elements",
+      image: `${dir}/${th.bg}`,
+      elements: [...taps.map((t) => t.el), ...controls, ...(config.extra_elements || [])],
+    },
+    layers,
   };
+}
+
+// Czy nakładka ma być widoczna. Nieznany / niedostępny stan = zgaszone / zamknięte.
+function layerOn(layer, hass) {
+  const st = hass && hass.states && hass.states[layer.entity];
+  if (!st) return false;
+  if (layer.kind === "light") return st.state === "on";
+  return st.state === "on" || st.state === "open" || st.state === "opening";
 }
 
 // Który motyw: wymuszony z config.theme, automatyczny albo null = klasyczny plan (stare obrazki).
@@ -337,27 +360,75 @@ class HaFloorPlanCard extends HTMLElement {
     const helpers = await window.loadCardHelpers();
     this._building = false;
     if (key !== this._themeKey) return; // w międzyczasie zmienił się motyw
-    const cfg = key ? buildThemed(this._config, key) : buildPictureElements(this._config);
+    let cfg;
+    let layers = [];
+    if (key) ({ cfg, layers } = buildThemed(this._config, key));
+    else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
     this.innerHTML = "";
-    // Pełny ekran: karta na całą szerokość, obraz dopasowany do wysokości okna, bez ramki.
-    if (this._config.fullscreen !== false) {
+
+    // opakowanie: karta + warstwa nakładek dokładnie nad obrazem
+    const wrap = document.createElement("div");
+    wrap.style.position = "relative";
+    wrap.style.display = "block";
+    const full = this._config.fullscreen !== false;
+    if (full) {
       this.style.display = "block";
       this.style.width = "100%";
       card.style.setProperty("--ha-card-border-width", "0");
       card.style.setProperty("--ha-card-border-radius", "0");
       card.style.setProperty("--ha-card-box-shadow", "none");
-      card.style.display = "block";
-      card.style.width = "100%";
+      // Dopasowanie do ekranu: cały obraz mieści się w oknie bez przewijania
+      // (wysokość okna minus górny pasek HA), proporcje zachowane, wyśrodkowany.
+      const th = key ? THEMES[key] : null;
+      const aspect = th ? th.w / th.h : 1933 / 814;
+      wrap.style.maxWidth = `calc((100dvh - var(--header-height, 56px) - env(safe-area-inset-top, 0px)) * ${aspect.toFixed(4)})`;
+      wrap.style.margin = "0 auto";
     }
-    this.appendChild(card);
+    card.style.display = "block";
+    card.style.width = "100%";
+    wrap.appendChild(card);
+
+    const layer = document.createElement("div");
+    Object.assign(layer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" });
+    this._layers = layers.map((l) => {
+      const img = document.createElement("img");
+      img.src = l.src;
+      img.alt = "";
+      img.draggable = false;
+      Object.assign(img.style, {
+        position: "absolute",
+        left: `${l.box[0]}%`,
+        top: `${l.box[1]}%`,
+        width: `${l.box[2]}%`,
+        height: `${l.box[3]}%`,
+        opacity: "0",
+        transition: "opacity 0.6s ease",
+        filter: l.kind === "light" ? GLOW_FILTER : "",
+      });
+      layer.appendChild(img);
+      return { ...l, img };
+    });
+    wrap.appendChild(layer);
+
+    this.appendChild(wrap);
     this._card = card;
+    this._updateLayers();
+  }
+
+  _updateLayers() {
+    if (!this._layers) return;
+    for (const l of this._layers) {
+      const op = layerOn(l, this._hass) ? "1" : "0";
+      if (l.img.style.opacity !== op) l.img.style.opacity = op;
+    }
   }
 
   set hass(hass) {
     this._hass = hass;
     if (this._card) this._card.hass = hass;
+    this._updateLayers();
     this._refresh(); // np. zachód słońca -> motyw nocny
   }
 

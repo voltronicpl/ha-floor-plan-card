@@ -49,9 +49,19 @@ theme: zima_noc_poziom   # albo: classic = stary plan (obrazki PNG z dist/)
 Dostępne motywy: `lato|jesien|zima` × `dzien|noc` × `poziom|pion` oraz `swieta` × `dzien|noc` × `szeroki|pion`.
 Pliki leżą w `dist/themes/<motyw>/`, a pozycje ikon i nakładek w `dist/themes/themes.json`.
 
+## Światła, brama i drzwi
+
+- **Światło** widać jako realistyczną poświatę: pokój płynnie się rozjaśnia i gaśnie (0,6 s).
+  Ikon żarówek domyślnie nie ma. **Klik w dowolne miejsce pokoju** włącza i wyłącza światło,
+  a przytrzymanie otwiera szczegóły. Ikony wrócą po ustawieniu `light_icons: true`.
+- **Brama i drzwi** pokazują prawdziwy stan z czujników: `on` (otwarte) to otwarta brama
+  albo uchylone skrzydło drzwi, `off` (zamknięte) to samo tło. Stan nieznany albo niedostępny
+  pokazuje zamknięte. Encje `cover.*` działają jak wcześniej (klik otwiera i zamyka).
+
 ## Mapa na cały ekran
 
-Karta sama zdejmuje ramkę i rozciąga się na całą szerokość (`fullscreen: true`, domyślnie).
+Karta sama zdejmuje ramkę i skaluje obraz do monitora (`fullscreen: true`, domyślnie). Cała mapa
+mieści się w oknie bez przewijania (wysokość ekranu minus górny pasek HA), z zachowanymi proporcjami i wyśrodkowana.
 Żeby zajęła **cały ekran**, a nie małe okienko, widok dashboardu musi być typu **Panel**:
 
 Edytuj dashboard → ołówek przy widoku → **Typ widoku: Panel (pojedyncza karta)**.
@@ -89,9 +99,11 @@ Domyślne encje (wbudowane w kartę, każdą można nadpisać):
 | kuchnia | `light.kuchnia_swiatlo_grupa` | – |
 | korytarz | `light.swiatlo_korytarz_wjsxie` | – |
 | garderoba | `light.garderoba_swiatlo` | – |
+| brama | `binary_sensor.brama` | – |
+| drzwi1 | `binary_sensor.czujnik_drzwi_garaz_contact` | – |
 | drzwi2 | `binary_sensor.czujnik_drzwi_glowne_contact` | – |
 
-Biuro, siłownia, pralnia/WC, brama i drzwi 1 nie mają jeszcze encji. Dopisz je w YAML-u, gdy będą.
+Biuro, siłownia i pralnia/WC nie mają jeszcze encji. Dopisz je w YAML-u, gdy będą.
 Pokój schowasz, wpisując `salon: false`. Drzwi i bramę można podać jako `cover.*` (klik otwiera)
 albo `binary_sensor.*` (czujnik, klik pokazuje szczegóły).
 
@@ -114,7 +126,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 |---|---|
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
 | `theme` | `auto` (domyślnie), `classic` albo nazwa motywu, np. `zima_noc_poziom`. |
-| `fullscreen` | `true` (domyślnie): bez ramki i odstępów, pełna szerokość, zachowane proporcje. `false`: zwykła karta. |
+| `light_icons` | `false` (domyślnie): sama poświata. `true`: dodatkowo ikony żarówek. |
+| `fullscreen` | `true` (domyślnie): bez ramki, dopasowana do okna bez przewijania, zachowane proporcje. `false`: zwykła karta. |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
 | `rooms.<pokój>.light` | Encja światła: włączone = pokój podświetlony. |
 | `rooms.<pokój>.temperature` | Sensor temperatury pod ikoną. |
