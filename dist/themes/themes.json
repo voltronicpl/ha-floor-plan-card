@@ -4260,6 +4260,1336 @@
      }
     }
    }
+  },
+  "jesien_dzien_poziom_2": {
+   "season": "jesien",
+   "time": "dzien",
+   "orient": "poziom",
+   "w": 1536,
+   "h": 1024,
+   "bg": "tlo.webp",
+   "rooms": {
+    "garaz": {
+     "icon": [
+      12.0,
+      33.28
+     ],
+     "temp": [
+      12.02,
+      37.68
+     ],
+     "light": {
+      "file": "swiatlo_garaz.webp",
+      "box": [
+       2.539,
+       16.406,
+       19.596,
+       48.926
+      ]
+     }
+    },
+    "warsztat": {
+     "icon": [
+      29.92,
+      22.57
+     ],
+     "temp": [
+      29.94,
+      26.97
+     ],
+     "light": {
+      "file": "swiatlo_warsztat.webp",
+      "box": [
+       20.182,
+       16.016,
+       20.768,
+       22.461
+      ]
+     }
+    },
+    "salon": {
+     "icon": [
+      49.96,
+      28.2
+     ],
+     "temp": [
+      49.99,
+      32.61
+     ],
+     "light": {
+      "file": "swiatlo_salon.webp",
+      "box": [
+       20.247,
+       15.918,
+       40.169,
+       35.352
+      ]
+     }
+    },
+    "biuro": {
+     "icon": [
+      62.97,
+      23.78
+     ],
+     "temp": [
+      63.0,
+      28.19
+     ],
+     "light": {
+      "file": "swiatlo_biuro.webp",
+      "box": [
+       57.812,
+       15.918,
+       9.505,
+       27.441
+      ]
+     }
+    },
+    "sypialnia": {
+     "icon": [
+      80.03,
+      22.49
+     ],
+     "temp": [
+      80.06,
+      26.9
+     ],
+     "light": {
+      "file": "swiatlo_sypialnia.webp",
+      "box": [
+       61.979,
+       15.918,
+       27.344,
+       27.246
+      ]
+     }
+    },
+    "silownia": {
+     "icon": [
+      27.05,
+      49.63
+     ],
+     "temp": [
+      27.07,
+      54.04
+     ],
+     "light": {
+      "file": "swiatlo_silownia.webp",
+      "box": [
+       20.312,
+       43.164,
+       14.258,
+       22.168
+      ]
+     }
+    },
+    "lazienka": {
+     "icon": [
+      37.04,
+      45.85
+     ],
+     "temp": [
+      37.06,
+      50.26
+     ],
+     "light": {
+      "file": "swiatlo_lazienka.webp",
+      "box": [
+       32.227,
+       43.164,
+       9.57,
+       22.168
+      ]
+     }
+    },
+    "kuchnia": {
+     "icon": [
+      50.11,
+      53.41
+     ],
+     "temp": [
+      50.13,
+      57.83
+     ],
+     "light": {
+      "file": "swiatlo_kuchnia.webp",
+      "box": [
+       38.932,
+       47.852,
+       21.875,
+       17.48
+      ]
+     }
+    },
+    "korytarz": {
+     "icon": [
+      64.13,
+      49.0
+     ],
+     "temp": [
+      64.16,
+      53.42
+     ],
+     "light": {
+      "file": "swiatlo_korytarz.webp",
+      "box": [
+       58.138,
+       40.039,
+       13.151,
+       25.391
+      ]
+     }
+    },
+    "garderoba": {
+     "icon": [
+      72.15,
+      45.84
+     ],
+     "temp": [
+      72.18,
+      50.26
+     ],
+     "light": {
+      "file": "swiatlo_garderoba.webp",
+      "box": [
+       68.294,
+       40.039,
+       9.18,
+       25.391
+      ]
+     }
+    },
+    "pralnia_wc": {
+     "icon": [
+      85.25,
+      48.99
+     ],
+     "temp": [
+      85.28,
+      53.42
+     ],
+     "light": {
+      "file": "swiatlo_pralnia_wc.webp",
+      "box": [
+       72.07,
+       40.332,
+       25.326,
+       25.098
+      ]
+     }
+    }
+   },
+   "covers": {
+    "brama": {
+     "icon": [
+      12.14,
+      68.52
+     ],
+     "open": {
+      "file": "brama_otwarte.webp",
+      "box": [
+       5.404,
+       64.258,
+       12.956,
+       7.324
+      ]
+     }
+    },
+    "drzwi1": {
+     "icon": [
+      21.64,
+      68.54
+     ],
+     "open": {
+      "file": "drzwi1_otwarte.webp",
+      "box": [
+       20.247,
+       64.941,
+       4.232,
+       7.52
+      ]
+     }
+    },
+    "drzwi2": {
+     "icon": [
+      63.75,
+      68.58
+     ],
+     "open": {
+      "file": "drzwi2_otwarte.webp",
+      "box": [
+       62.24,
+       64.16,
+       5.339,
+       8.496
+      ]
+     }
+    }
+   }
+  },
+  "jesien_noc_poziom_2": {
+   "season": "jesien",
+   "time": "noc",
+   "orient": "poziom",
+   "w": 1672,
+   "h": 941,
+   "bg": "tlo.webp",
+   "rooms": {
+    "garaz": {
+     "icon": [
+      12.04,
+      37.58
+     ],
+     "temp": [
+      12.06,
+      42.81
+     ],
+     "light": {
+      "file": "swiatlo_garaz.webp",
+      "box": [
+       2.691,
+       17.535,
+       19.498,
+       58.13
+      ]
+     }
+    },
+    "warsztat": {
+     "icon": [
+      29.98,
+      24.87
+     ],
+     "temp": [
+      30.0,
+      30.1
+     ],
+     "light": {
+      "file": "swiatlo_warsztat.webp",
+      "box": [
+       20.215,
+       17.003,
+       20.813,
+       26.886
+      ]
+     }
+    },
+    "salon": {
+     "icon": [
+      50.05,
+      31.58
+     ],
+     "temp": [
+      50.07,
+      36.82
+     ],
+     "light": {
+      "file": "swiatlo_salon.webp",
+      "box": [
+       20.275,
+       17.003,
+       40.191,
+       41.977
+      ]
+     }
+    },
+    "biuro": {
+     "icon": [
+      63.08,
+      26.33
+     ],
+     "temp": [
+      63.1,
+      31.57
+     ],
+     "light": {
+      "file": "swiatlo_biuro.webp",
+      "box": [
+       57.895,
+       16.897,
+       9.569,
+       32.731
+      ]
+     }
+    },
+    "sypialnia": {
+     "icon": [
+      80.18,
+      24.81
+     ],
+     "temp": [
+      80.2,
+      30.06
+     ],
+     "light": {
+      "file": "swiatlo_sypialnia.webp",
+      "box": [
+       62.081,
+       16.897,
+       27.392,
+       32.519
+      ]
+     }
+    },
+    "silownia": {
+     "icon": [
+      27.11,
+      56.99
+     ],
+     "temp": [
+      27.13,
+      62.22
+     ],
+     "light": {
+      "file": "swiatlo_silownia.webp",
+      "box": [
+       20.335,
+       49.309,
+       14.294,
+       26.355
+      ]
+     }
+    },
+    "lazienka": {
+     "icon": [
+      37.1,
+      52.52
+     ],
+     "temp": [
+      37.12,
+      57.75
+     ],
+     "light": {
+      "file": "swiatlo_lazienka.webp",
+      "box": [
+       32.237,
+       49.309,
+       9.629,
+       26.355
+      ]
+     }
+    },
+    "kuchnia": {
+     "icon": [
+      50.16,
+      61.49
+     ],
+     "temp": [
+      50.17,
+      66.73
+     ],
+     "light": {
+      "file": "swiatlo_kuchnia.webp",
+      "box": [
+       38.995,
+       54.835,
+       21.83,
+       20.829
+      ]
+     }
+    },
+    "korytarz": {
+     "icon": [
+      64.19,
+      56.27
+     ],
+     "temp": [
+      64.21,
+      61.51
+     ],
+     "light": {
+      "file": "swiatlo_korytarz.webp",
+      "box": [
+       58.194,
+       45.59,
+       13.158,
+       30.181
+      ]
+     }
+    },
+    "garderoba": {
+     "icon": [
+      72.22,
+      52.54
+     ],
+     "temp": [
+      72.24,
+      57.78
+     ],
+     "light": {
+      "file": "swiatlo_garderoba.webp",
+      "box": [
+       68.242,
+       45.59,
+       9.27,
+       30.181
+      ]
+     }
+    },
+    "pralnia_wc": {
+     "icon": [
+      85.32,
+      56.29
+     ],
+     "temp": [
+      85.33,
+      61.53
+     ],
+     "light": {
+      "file": "swiatlo_pralnia_wc.webp",
+      "box": [
+       72.069,
+       45.909,
+       25.359,
+       29.862
+      ]
+     }
+    }
+   },
+   "covers": {
+    "brama": {
+     "icon": [
+      12.22,
+      79.34
+     ],
+     "open": {
+      "file": "brama_otwarte.webp",
+      "box": [
+       5.443,
+       74.283,
+       13.038,
+       8.714
+      ]
+     }
+    },
+    "drzwi1": {
+     "icon": [
+      21.7,
+      79.36
+     ],
+     "open": {
+      "file": "drzwi1_otwarte.webp",
+      "box": [
+       20.335,
+       75.133,
+       4.246,
+       8.82
+      ]
+     }
+    },
+    "drzwi2": {
+     "icon": [
+      63.77,
+      79.46
+     ],
+     "open": {
+      "file": "drzwi2_otwarte.webp",
+      "box": [
+       62.321,
+       74.176,
+       5.263,
+       10.096
+      ]
+     }
+    }
+   }
+  },
+  "jesien_dzien_pion_2": {
+   "season": "jesien",
+   "time": "dzien",
+   "orient": "pion",
+   "w": 941,
+   "h": 1672,
+   "bg": "tlo.webp",
+   "rooms": {
+    "garaz": {
+     "icon": [
+      11.72,
+      46.64
+     ],
+     "temp": [
+      11.78,
+      48.37
+     ],
+     "light": {
+      "file": "swiatlo_garaz.webp",
+      "box": [
+       2.444,
+       40.072,
+       19.766,
+       19.019
+      ]
+     }
+    },
+    "warsztat": {
+     "icon": [
+      30.14,
+      42.4
+     ],
+     "temp": [
+      30.18,
+      44.14
+     ],
+     "light": {
+      "file": "swiatlo_warsztat.webp",
+      "box": [
+       20.191,
+       39.892,
+       21.254,
+       8.732
+      ]
+     }
+    },
+    "salon": {
+     "icon": [
+      50.88,
+      44.62
+     ],
+     "temp": [
+      50.91,
+      46.36
+     ],
+     "light": {
+      "file": "swiatlo_salon.webp",
+      "box": [
+       20.404,
+       39.833,
+       41.126,
+       13.756
+      ]
+     }
+    },
+    "biuro": {
+     "icon": [
+      64.36,
+      42.86
+     ],
+     "temp": [
+      64.38,
+      44.6
+     ],
+     "light": {
+      "file": "swiatlo_biuro.webp",
+      "box": [
+       59.086,
+       39.833,
+       9.564,
+       10.646
+      ]
+     }
+    },
+    "sypialnia": {
+     "icon": [
+      82.08,
+      42.34
+     ],
+     "temp": [
+      82.09,
+      44.09
+     ],
+     "light": {
+      "file": "swiatlo_sypialnia.webp",
+      "box": [
+       63.549,
+       39.833,
+       27.949,
+       10.586
+      ]
+     }
+    },
+    "silownia": {
+     "icon": [
+      27.31,
+      53.05
+     ],
+     "temp": [
+      27.36,
+      54.78
+     ],
+     "light": {
+      "file": "swiatlo_silownia.webp",
+      "box": [
+       20.51,
+       50.598,
+       14.453,
+       8.493
+      ]
+     }
+    },
+    "lazienka": {
+     "icon": [
+      37.57,
+      51.57
+     ],
+     "temp": [
+      37.61,
+      53.3
+     ],
+     "light": {
+      "file": "swiatlo_lazienka.webp",
+      "box": [
+       32.731,
+       50.598,
+       9.671,
+       8.553
+      ]
+     }
+    },
+    "kuchnia": {
+     "icon": [
+      51.05,
+      54.54
+     ],
+     "temp": [
+      51.08,
+      56.26
+     ],
+     "light": {
+      "file": "swiatlo_kuchnia.webp",
+      "box": [
+       39.639,
+       52.392,
+       22.317,
+       6.758
+      ]
+     }
+    },
+    "korytarz": {
+     "icon": [
+      65.52,
+      52.8
+     ],
+     "temp": [
+      65.54,
+      54.54
+     ],
+     "light": {
+      "file": "swiatlo_korytarz.webp",
+      "box": [
+       59.511,
+       49.402,
+       13.284,
+       9.749
+      ]
+     }
+    },
+    "garderoba": {
+     "icon": [
+      73.81,
+      51.56
+     ],
+     "temp": [
+      73.83,
+      53.3
+     ],
+     "light": {
+      "file": "swiatlo_garderoba.webp",
+      "box": [
+       69.926,
+       49.342,
+       9.245,
+       9.809
+      ]
+     }
+    },
+    "pralnia_wc": {
+     "icon": [
+      87.35,
+      52.8
+     ],
+     "temp": [
+      87.36,
+      54.54
+     ],
+     "light": {
+      "file": "swiatlo_pralnia_wc.webp",
+      "box": [
+       73.858,
+       49.462,
+       25.93,
+       9.689
+      ]
+     }
+    }
+   },
+   "covers": {
+    "brama": {
+     "icon": [
+      12.15,
+      60.42
+     ],
+     "open": {
+      "file": "brama_otwarte.webp",
+      "box": [
+       5.207,
+       58.732,
+       13.39,
+       2.871
+      ]
+     }
+    },
+    "drzwi1": {
+     "icon": [
+      21.86,
+      60.43
+     ],
+     "open": {
+      "file": "drzwi1_otwarte.webp",
+      "box": [
+       20.404,
+       59.031,
+       4.463,
+       2.931
+      ]
+     }
+    },
+    "drzwi2": {
+     "icon": [
+      65.09,
+      60.47
+     ],
+     "open": {
+      "file": "drzwi2_otwarte.webp",
+      "box": [
+       63.549,
+       58.732,
+       5.526,
+       3.349
+      ]
+     }
+    }
+   }
+  },
+  "jesien_noc_pion_2": {
+   "season": "jesien",
+   "time": "noc",
+   "orient": "pion",
+   "w": 941,
+   "h": 1672,
+   "bg": "tlo.webp",
+   "rooms": {
+    "garaz": {
+     "icon": [
+      12.02,
+      47.07
+     ],
+     "temp": [
+      12.04,
+      48.76
+     ],
+     "light": {
+      "file": "swiatlo_garaz.webp",
+      "box": [
+       2.55,
+       40.67,
+       19.66,
+       18.6
+      ]
+     }
+    },
+    "warsztat": {
+     "icon": [
+      30.17,
+      42.99
+     ],
+     "temp": [
+      30.2,
+      44.67
+     ],
+     "light": {
+      "file": "swiatlo_warsztat.webp",
+      "box": [
+       20.404,
+       40.55,
+       20.829,
+       8.493
+      ]
+     }
+    },
+    "salon": {
+     "icon": [
+      50.46,
+      45.15
+     ],
+     "temp": [
+      50.49,
+      46.84
+     ],
+     "light": {
+      "file": "swiatlo_salon.webp",
+      "box": [
+       20.51,
+       40.55,
+       40.489,
+       13.337
+      ]
+     }
+    },
+    "biuro": {
+     "icon": [
+      63.59,
+      43.47
+     ],
+     "temp": [
+      63.63,
+      45.15
+     ],
+     "light": {
+      "file": "swiatlo_biuro.webp",
+      "box": [
+       58.448,
+       40.55,
+       9.458,
+       10.347
+      ]
+     }
+    },
+    "sypialnia": {
+     "icon": [
+      80.82,
+      42.99
+     ],
+     "temp": [
+      80.86,
+      44.67
+     ],
+     "light": {
+      "file": "swiatlo_sypialnia.webp",
+      "box": [
+       62.806,
+       40.55,
+       27.418,
+       10.287
+      ]
+     }
+    },
+    "silownia": {
+     "icon": [
+      27.31,
+      53.33
+     ],
+     "temp": [
+      27.33,
+      55.02
+     ],
+     "light": {
+      "file": "swiatlo_silownia.webp",
+      "box": [
+       20.51,
+       50.957,
+       14.346,
+       8.313
+      ]
+     }
+    },
+    "lazienka": {
+     "icon": [
+      37.42,
+      51.89
+     ],
+     "temp": [
+      37.45,
+      53.58
+     ],
+     "light": {
+      "file": "swiatlo_lazienka.webp",
+      "box": [
+       32.625,
+       50.957,
+       9.564,
+       8.313
+      ]
+     }
+    },
+    "kuchnia": {
+     "icon": [
+      50.66,
+      54.79
+     ],
+     "temp": [
+      50.69,
+      56.48
+     ],
+     "light": {
+      "file": "swiatlo_kuchnia.webp",
+      "box": [
+       39.426,
+       52.691,
+       21.998,
+       6.579
+      ]
+     }
+    },
+    "korytarz": {
+     "icon": [
+      64.83,
+      53.1
+     ],
+     "temp": [
+      64.87,
+      54.79
+     ],
+     "light": {
+      "file": "swiatlo_korytarz.webp",
+      "box": [
+       58.874,
+       49.761,
+       13.071,
+       9.569
+      ]
+     }
+    },
+    "garderoba": {
+     "icon": [
+      72.93,
+      51.9
+     ],
+     "temp": [
+      72.97,
+      53.59
+     ],
+     "light": {
+      "file": "swiatlo_garderoba.webp",
+      "box": [
+       69.182,
+       49.761,
+       9.139,
+       9.569
+      ]
+     }
+    },
+    "pralnia_wc": {
+     "icon": [
+      86.16,
+      53.11
+     ],
+     "temp": [
+      86.21,
+      54.8
+     ],
+     "light": {
+      "file": "swiatlo_pralnia_wc.webp",
+      "box": [
+       72.901,
+       49.821,
+       25.505,
+       9.51
+      ]
+     }
+    }
+   },
+   "covers": {
+    "brama": {
+     "icon": [
+      12.21,
+      60.57
+     ],
+     "open": {
+      "file": "brama_otwarte.webp",
+      "box": [
+       5.313,
+       58.911,
+       13.284,
+       2.811
+      ]
+     }
+    },
+    "drzwi1": {
+     "icon": [
+      21.85,
+      60.57
+     ],
+     "open": {
+      "file": "drzwi1_otwarte.webp",
+      "box": [
+       20.404,
+       59.211,
+       4.357,
+       2.871
+      ]
+     }
+    },
+    "drzwi2": {
+     "icon": [
+      64.5,
+      60.59
+     ],
+     "open": {
+      "file": "drzwi2_otwarte.webp",
+      "box": [
+       62.912,
+       58.911,
+       5.526,
+       3.23
+      ]
+     }
+    }
+   }
+  },
+  "jesien_noc_pion_3": {
+   "season": "jesien",
+   "time": "noc",
+   "orient": "pion",
+   "w": 941,
+   "h": 1672,
+   "bg": "tlo.webp",
+   "rooms": {
+    "garaz": {
+     "icon": [
+      12.39,
+      46.68
+     ],
+     "temp": [
+      12.39,
+      48.36
+     ],
+     "light": {
+      "file": "swiatlo_garaz.webp",
+      "box": [
+       2.763,
+       40.311,
+       19.766,
+       18.6
+      ]
+     }
+    },
+    "warsztat": {
+     "icon": [
+      30.61,
+      42.59
+     ],
+     "temp": [
+      30.63,
+      44.27
+     ],
+     "light": {
+      "file": "swiatlo_warsztat.webp",
+      "box": [
+       20.829,
+       40.132,
+       20.829,
+       8.493
+      ]
+     }
+    },
+    "salon": {
+     "icon": [
+      50.97,
+      44.74
+     ],
+     "temp": [
+      50.99,
+      46.42
+     ],
+     "light": {
+      "file": "swiatlo_salon.webp",
+      "box": [
+       20.829,
+       40.132,
+       40.701,
+       13.337
+      ]
+     }
+    },
+    "biuro": {
+     "icon": [
+      64.18,
+      43.05
+     ],
+     "temp": [
+      64.22,
+      44.73
+     ],
+     "light": {
+      "file": "swiatlo_biuro.webp",
+      "box": [
+       58.98,
+       40.132,
+       9.564,
+       10.347
+      ]
+     }
+    },
+    "sypialnia": {
+     "icon": [
+      81.52,
+      42.56
+     ],
+     "temp": [
+      81.57,
+      44.24
+     ],
+     "light": {
+      "file": "swiatlo_sypialnia.webp",
+      "box": [
+       63.337,
+       40.132,
+       27.63,
+       10.287
+      ]
+     }
+    },
+    "silownia": {
+     "icon": [
+      27.65,
+      52.93
+     ],
+     "temp": [
+      27.66,
+      54.62
+     ],
+     "light": {
+      "file": "swiatlo_silownia.webp",
+      "box": [
+       20.935,
+       50.538,
+       14.24,
+       8.373
+      ]
+     }
+    },
+    "lazienka": {
+     "icon": [
+      37.82,
+      51.48
+     ],
+     "temp": [
+      37.83,
+      53.17
+     ],
+     "light": {
+      "file": "swiatlo_lazienka.webp",
+      "box": [
+       33.05,
+       50.538,
+       9.458,
+       8.373
+      ]
+     }
+    },
+    "kuchnia": {
+     "icon": [
+      51.12,
+      54.38
+     ],
+     "temp": [
+      51.15,
+      56.08
+     ],
+     "light": {
+      "file": "swiatlo_kuchnia.webp",
+      "box": [
+       39.851,
+       52.333,
+       22.104,
+       6.579
+      ]
+     }
+    },
+    "korytarz": {
+     "icon": [
+      65.4,
+      52.69
+     ],
+     "temp": [
+      65.44,
+      54.39
+     ],
+     "light": {
+      "file": "swiatlo_korytarz.webp",
+      "box": [
+       59.511,
+       49.342,
+       13.071,
+       9.569
+      ]
+     }
+    },
+    "garderoba": {
+     "icon": [
+      73.57,
+      51.48
+     ],
+     "temp": [
+      73.61,
+      53.18
+     ],
+     "light": {
+      "file": "swiatlo_garderoba.webp",
+      "box": [
+       69.713,
+       49.342,
+       9.245,
+       9.569
+      ]
+     }
+    },
+    "pralnia_wc": {
+     "icon": [
+      86.93,
+      52.7
+     ],
+     "temp": [
+      86.98,
+      54.39
+     ],
+     "light": {
+      "file": "swiatlo_pralnia_wc.webp",
+      "box": [
+       73.645,
+       49.402,
+       25.717,
+       9.51
+      ]
+     }
+    }
+   },
+   "covers": {
+    "brama": {
+     "icon": [
+      12.41,
+      60.18
+     ],
+     "open": {
+      "file": "brama_otwarte.webp",
+      "box": [
+       5.526,
+       58.553,
+       13.284,
+       2.811
+      ]
+     }
+    },
+    "drzwi1": {
+     "icon": [
+      22.09,
+      60.18
+     ],
+     "open": {
+      "file": "drzwi1_otwarte.webp",
+      "box": [
+       20.723,
+       58.792,
+       4.251,
+       2.931
+      ]
+     }
+    },
+    "drzwi2": {
+     "icon": [
+      65.05,
+      60.21
+     ],
+     "open": {
+      "file": "drzwi2_otwarte.webp",
+      "box": [
+       63.549,
+       58.493,
+       5.42,
+       3.289
+      ]
+     }
+    }
+   }
   }
  }
 }
