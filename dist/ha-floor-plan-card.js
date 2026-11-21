@@ -13,10 +13,19 @@
  *   drzwi2: cover.drzwi_2
  * theme: auto            (domyślnie) | classic | np. zima_noc_poziom
  * variant: 1|2|3        (opcjonalnie; bez tego warianty zmieniają się codziennie)
- * light_icons: false     (domyślnie: sama poświata, bez ikon żarówek)
+ * light_icons: true      (domyślnie; false = sama poświata bez ikon)
+ * show_empty_temp: false (true = „–” w pokojach bez czujnika temperatury)
+ * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
+
+// Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
+// Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
+let SCRIPT_BASE = "/hacsfiles/ha-floor-plan-card";
+try { SCRIPT_BASE = new URL(".", import.meta.url).href.replace(/\/$/, ""); } catch (e) { /* zostaje domyślny */ }
+// ?v=wersja przy obrazkach: aplikacja na telefonie nie trzyma starych plików w pamięci podręcznej
+const ASSET_Q = `?v=${CARD_VERSION}`;
 
 // Encje z HA Miśka. Używane, gdy w konfiguracji karty nie podasz rooms/covers.
 // Każdą można nadpisać w YAML-u karty.
@@ -41,7 +50,7 @@ const DEFAULT_COVERS = {
 // (klik w środek pokoju = włącz/wyłącz). light_icons: true pokazuje je.
 const GLOW_FILTER = "drop-shadow(0 0 14px rgba(255,190,110,0.55)) saturate(1.08)";
 function lightIconStyle(config, base) {
-  if (config.light_icons) return base;
+  if (config.light_icons !== false) return base;
   return { ...base, opacity: "0", "--mdc-icon-size": "56px", background: "transparent" };
 }
 
@@ -70,8 +79,8 @@ const OVERLAY_STYLE = { left: "50%", top: "50%", width: "100%", "pointer-events"
 const NO_ACTION = { action: "none" };
 
 function buildPictureElements(config) {
-  const base = (config.base_path || "/hacsfiles/ha-floor-plan-card").replace(/\/$/, "");
-  const img = (n) => `${base}/${n}.png`;
+  const base = (config.base_path || SCRIPT_BASE).replace(/\/$/, "");
+  const img = (n) => `${base}/${n}.png${ASSET_Q}`;
   const rooms = { ...DEFAULT_ROOMS, ...(config.rooms || {}) };
   const covers = { ...DEFAULT_COVERS, ...(config.covers || {}) };
   const overlays = [];
@@ -168,11 +177,12 @@ const THEMES = {"jesien_dzien_pion":{"season":"jesien","time":"dzien","orient":"
 const SEASON_NAMES = { lato: "Lato", jesien: "Jesień", zima: "Zima", swieta: "Święta" };
 
 // marzec–sierpień lato, wrzesień–listopad jesień, grudzień–luty zima,
-// 1 grudnia – 6 stycznia święta (zamiast zimy)
-function seasonFor(date) {
+// 1 grudnia – 6 stycznia święta (zamiast zimy). Domyślnie zima już od 15 listopada.
+function seasonFor(date, winterFromNov15 = true) {
   const m = date.getMonth() + 1;
   const d = date.getDate();
   if (m === 12 || (m === 1 && d <= 6)) return "swieta";
+  if (winterFromNov15 && m === 11 && d >= 15) return "zima";
   if (m >= 3 && m <= 8) return "lato";
   if (m >= 9 && m <= 11) return "jesien";
   return "zima";
@@ -182,8 +192,8 @@ function isPortrait() {
   return window.innerHeight > window.innerWidth;
 }
 
-function autoThemeKey(hass, variant) {
-  const season = seasonFor(new Date());
+function autoThemeKey(hass, variant, winterFromNov15 = true) {
+  const season = seasonFor(new Date(), winterFromNov15);
   const sun = hass && hass.states && hass.states["sun.sun"];
   const time = sun && sun.state === "below_horizon" ? "noc" : "dzien";
   let orient = isPortrait() ? "pion" : "poziom";
@@ -234,7 +244,7 @@ function boxStyle(box) {
 // żeby mogły płynnie się rozjaśniać i gasnąć.
 function buildThemed(config, key) {
   const th = THEMES[key];
-  const base = (config.base_path || "/hacsfiles/ha-floor-plan-card").replace(/\/$/, "");
+  const base = (config.base_path || SCRIPT_BASE).replace(/\/$/, "");
   const dir = `${base}/themes/${key}`;
   const rooms = { ...DEFAULT_ROOMS, ...(config.rooms || {}) };
   const covers = { ...DEFAULT_COVERS, ...(config.covers || {}) };
@@ -243,16 +253,18 @@ function buildThemed(config, key) {
   const taps = [];
   const controls = [];
   const layers = [];
+  const badges = [];
 
   for (const [rk, def] of Object.entries(ROOMS)) {
-    const room = rooms[rk];
+    if (rooms[rk] === false) continue; // pokój schowany
+    const room = rooms[rk] || {};
     const tr = th.rooms && th.rooms[rk];
-    if (!room || !tr) continue;
+    if (!tr) continue;
     const [il, it] = tr.icon;
     const [tl, tt] = tr.temp || [il, it + 4];
     if (room.light && tr.light) {
       const b = tr.light.box;
-      layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}`, box: b });
+      layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}${ASSET_Q}`, box: b });
       // niewidoczna strefa na cały pokój: klik = włącz/wyłącz, przytrzymanie = szczegóły
       taps.push({
         area: b[2] * b[3],
@@ -266,33 +278,14 @@ function buildThemed(config, key) {
           style: { ...boxStyle(b), "pointer-events": "auto", cursor: "pointer" },
         },
       });
-      if (config.light_icons) {
-        controls.push({
-          type: "state-icon",
-          entity: room.light,
-          title: `${room.name || def.name} - światło`,
-          icon: room.icon || "mdi:lightbulb",
-          state_color: true,
-          tap_action: { action: "toggle" },
-          hold_action: { action: "more-info" },
-          style: {
-            left: `${il}%`, top: `${it}%`,
-            background: "rgba(0,0,0,0.45)", "border-radius": "50%", padding: "6px",
-            "--mdc-icon-size": iconSize,
-          },
-        });
+      if (config.light_icons !== false) {
+        badges.push({ kind: "light", entity: room.light, name: room.name || def.name, icon: room.icon, pos: [il, it] });
       }
     }
-    if (room.temperature) {
-      controls.push({
-        type: "state-label",
-        entity: room.temperature,
-        style: {
-          left: `${tl}%`, top: `${tt}%`,
-          color: "white", "font-size": portrait ? "12px" : "14px", "font-weight": "bold",
-          background: "rgba(0,0,0,0.55)", "border-radius": "8px", padding: "2px 6px",
-        },
-      });
+    // temperatura pod ikoną pokoju (albo w jej miejscu, gdy pokój nie ma ikony)
+    const withIcon = !!(room.light && tr.light && config.light_icons !== false);
+    if (room.temperature || config.show_empty_temp) {
+      badges.push({ kind: "temp", entity: room.temperature || null, name: room.name || def.name, pos: [il, it], below: withIcon });
     }
   }
 
@@ -301,7 +294,7 @@ function buildThemed(config, key) {
     const tc = th.covers && th.covers[ck];
     if (!entity || !tc) continue;
     const isSensor = entity.startsWith("binary_sensor.");
-    if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}`, box: tc.open.box });
+    if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}${ASSET_Q}`, box: tc.open.box });
     controls.push({
       type: "state-icon",
       entity,
@@ -323,10 +316,11 @@ function buildThemed(config, key) {
   return {
     cfg: {
       type: "picture-elements",
-      image: `${dir}/${th.bg}`,
+      image: `${dir}/${th.bg}${ASSET_Q}`,
       elements: [...taps.map((t) => t.el), ...controls, ...(config.extra_elements || [])],
     },
     layers,
+    badges,
   };
 }
 
@@ -343,10 +337,186 @@ function resolveTheme(config, hass) {
   const t = config.theme || "auto";
   if (t === "classic" || t === "klasyczny") return null;
   if (t !== "auto") return THEMES[t] ? (config.variant ? pickVariant(t, config.variant) : t) : null;
-  return autoThemeKey(hass, config.variant);
+  return autoThemeKey(hass, config.variant, config.winter_from_nov15 !== false);
 }
 
+const BADGE_CSS = `
+.fp-badges { position: absolute; inset: 0; pointer-events: none; }
+.fp-light, .fp-temp { position: absolute; pointer-events: auto; cursor: pointer; user-select: none;
+  -webkit-tap-highlight-color: transparent; }
+.fp-light { width: var(--fp-s); height: var(--fp-s); transform: translate(-50%, -50%); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(18, 20, 26, 0.55); border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.72); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --mdc-icon-size: calc(var(--fp-s) * 0.58);
+  transition: background 0.6s ease, color 0.6s ease, box-shadow 0.6s ease, border-color 0.6s ease; }
+.fp-light.on { color: #fff7df; border-color: rgba(255, 214, 150, 0.9);
+  background: radial-gradient(circle at 50% 40%, #ffd78a 0%, #f6a83c 55%, #c9761e 100%);
+  box-shadow: 0 0 calc(var(--fp-s) * 0.45) calc(var(--fp-s) * 0.12) rgba(255, 176, 72, 0.75), 0 2px 8px rgba(0, 0, 0, 0.4); }
+.fp-light.na { opacity: 0.45; }
+.fp-light:hover { transform: translate(-50%, -50%) scale(1.08); }
+.fp-temp { transform: translate(-50%, -50%); display: flex; align-items: center; gap: 2px; white-space: nowrap;
+  padding: calc(var(--fp-s) * 0.06) calc(var(--fp-s) * 0.22) calc(var(--fp-s) * 0.06) calc(var(--fp-s) * 0.1);
+  border-radius: 999px; background: rgba(18, 20, 26, 0.62); border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  color: #fff; font: 600 calc(var(--fp-s) * 0.36) / 1.2 var(--paper-font-body1_-_font-family, system-ui, sans-serif);
+  --mdc-icon-size: calc(var(--fp-s) * 0.4); }
+.fp-temp ha-icon { color: #9be59b; }
+.fp-temp.cold ha-icon { color: #7fc3ff; }
+.fp-temp.warm ha-icon { color: #ffab5e; }
+.fp-temp.fp-below { transform: translate(-50%, calc(var(--fp-s) * 0.62)); }
+`;
+
+// ==== EDYTOR WIZUALNY ====
+const EDITOR_ROOMS = Object.keys(ROOMS);
+const EDITOR_COVERS = Object.keys(COVERS);
+const THEME_BASES = Object.keys(THEMES).filter((k) => !/_\d+$/.test(k));
+
+class HaFloorPlanCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  _data() {
+    const c = this._config || {};
+    const rooms = { ...DEFAULT_ROOMS, ...(c.rooms || {}) };
+    const covers = { ...DEFAULT_COVERS, ...(c.covers || {}) };
+    const d = {
+      theme: c.theme || "auto",
+      variant: c.variant ? String(c.variant) : "auto",
+      light_icons: c.light_icons !== false,
+      show_empty_temp: !!c.show_empty_temp,
+      winter_from_nov15: c.winter_from_nov15 !== false,
+      fullscreen: c.fullscreen !== false,
+    };
+    for (const k of EDITOR_ROOMS) {
+      const r = rooms[k] || {};
+      d[`${k}__light`] = r.light || "";
+      d[`${k}__temperature`] = r.temperature || "";
+    }
+    for (const k of EDITOR_COVERS) d[`cover__${k}`] = covers[k] || "";
+    return d;
+  }
+
+  _schema() {
+    const lightSel = { entity: { domain: ["light", "switch"] } };
+    const tempSel = { entity: { domain: "sensor" } };
+    const coverSel = { entity: { domain: ["binary_sensor", "cover"] } };
+    return [
+      {
+        type: "grid", name: "", schema: [
+          { name: "theme", selector: { select: { mode: "dropdown", options: [
+            { value: "auto", label: "Automatyczny (pora roku, dzień/noc)" },
+            { value: "classic", label: "Klasyczny plan" },
+            ...THEME_BASES.map((k) => ({ value: k, label: k })),
+          ] } } },
+          { name: "variant", selector: { select: { mode: "dropdown", options: [
+            { value: "auto", label: "Codziennie inny" }, { value: "1", label: "1" },
+            { value: "2", label: "2" }, { value: "3", label: "3" },
+          ] } } },
+        ],
+      },
+      { name: "light_icons", selector: { boolean: {} } },
+      { name: "show_empty_temp", selector: { boolean: {} } },
+      { name: "winter_from_nov15", selector: { boolean: {} } },
+      { name: "fullscreen", selector: { boolean: {} } },
+      ...EDITOR_ROOMS.map((k) => ({
+        type: "expandable", flatten: true, title: ROOMS[k].name, icon: "mdi:floor-plan",
+        schema: [
+          { name: `${k}__light`, selector: lightSel },
+          { name: `${k}__temperature`, selector: tempSel },
+        ],
+      })),
+      {
+        type: "expandable", flatten: true, title: "Brama i drzwi", icon: "mdi:garage",
+        schema: EDITOR_COVERS.map((k) => ({ name: `cover__${k}`, selector: coverSel })),
+      },
+    ];
+  }
+
+  _label(s) {
+    const n = s.name || "";
+    const labels = {
+      theme: "Motyw", variant: "Wariant motywu", light_icons: "Ikonki światła",
+      show_empty_temp: "Pokaż „–” w pokojach bez czujnika temperatury",
+      winter_from_nov15: "Zima od 15 listopada", fullscreen: "Pełny ekran",
+    };
+    if (labels[n]) return labels[n];
+    if (n.endsWith("__light")) return "Światło";
+    if (n.endsWith("__temperature")) return "Czujnik temperatury";
+    if (n.startsWith("cover__")) return COVERS[n.slice(7)].name;
+    return n;
+  }
+
+  _changed(ev) {
+    ev.stopPropagation();
+    const d = ev.detail.value;
+    const c = { ...this._config };
+    c.theme = d.theme && d.theme !== "auto" ? d.theme : undefined;
+    c.variant = d.variant && d.variant !== "auto" ? parseInt(d.variant, 10) : undefined;
+    c.light_icons = d.light_icons === false ? false : undefined;
+    c.show_empty_temp = d.show_empty_temp ? true : undefined;
+    c.winter_from_nov15 = d.winter_from_nov15 === false ? false : undefined;
+    c.fullscreen = d.fullscreen === false ? false : undefined;
+    const rooms = {};
+    for (const k of EDITOR_ROOMS) {
+      const light = d[`${k}__light`] || undefined;
+      const temperature = d[`${k}__temperature`] || undefined;
+      const def = DEFAULT_ROOMS[k] || {};
+      if (light === def.light && temperature === def.temperature) continue; // jak domyślnie
+      if (!light && !temperature) { if (DEFAULT_ROOMS[k]) rooms[k] = false; continue; }
+      rooms[k] = { ...(light ? { light } : {}), ...(temperature ? { temperature } : {}) };
+    }
+    const covers = {};
+    for (const k of EDITOR_COVERS) {
+      const e = d[`cover__${k}`] || undefined;
+      if (e === DEFAULT_COVERS[k]) continue;
+      if (!e) { if (DEFAULT_COVERS[k]) covers[k] = false; continue; }
+      covers[k] = e;
+    }
+    c.rooms = Object.keys(rooms).length ? rooms : undefined;
+    c.covers = Object.keys(covers).length ? covers : undefined;
+    for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
+    this._config = c;
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: c }, bubbles: true, composed: true }));
+  }
+
+  async _render() {
+    if (!this._form) {
+      // ha-form ładuje się leniwie; wymuszamy załadowanie przez edytor wbudowanej karty
+      if (!customElements.get("ha-form")) {
+        try {
+          const helpers = await window.loadCardHelpers();
+          const c = await helpers.createCardElement({ type: "entities", entities: [] });
+          if (c.constructor.getConfigElement) await c.constructor.getConfigElement();
+        } catch (e) { /* nic */ }
+        await customElements.whenDefined("ha-form");
+      }
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) => this._label(s);
+      this._form.addEventListener("value-changed", (ev) => this._changed(ev));
+      this.appendChild(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = this._schema();
+    this._form.data = this._data();
+  }
+}
+
+if (!customElements.get("ha-floor-plan-card-editor")) customElements.define("ha-floor-plan-card-editor", HaFloorPlanCardEditor);
+
 class HaFloorPlanCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("ha-floor-plan-card-editor");
+  }
+
   setConfig(config) {
     if (!config) throw new Error("Brak konfiguracji");
     this._config = config;
@@ -356,6 +526,8 @@ class HaFloorPlanCard extends HTMLElement {
   }
 
   connectedCallback() {
+    // po powrocie do widoku (np. aplikacja z tła) zbuduj kartę od nowa, jeśli zniknęła
+    if (this._config && !this.firstChild) { this._card = null; this._themeKey = undefined; this._refresh(); }
     if (!this._onResize) this._onResize = () => this._refresh();
     window.addEventListener("resize", this._onResize);
     // co minutę sprawdza datę (zmiana pory roku o północy)
@@ -377,13 +549,27 @@ class HaFloorPlanCard extends HTMLElement {
   }
 
   async _build(key) {
+    try {
+      await this._buildInner(key);
+    } catch (e) {
+      // zamiast pustego miejsca pokaż, co poszło nie tak (łatwiej znaleźć problem na telefonie)
+      this._building = false;
+      console.error("ha-floor-plan-card:", e);
+      this.innerHTML = `<ha-card style="padding:12px;color:var(--error-color,#db4437)">Mapa domu: błąd ładowania – ${String((e && e.message) || e).replace(/</g, "&lt;")}</ha-card>`;
+    }
+  }
+
+  async _buildInner(key) {
     this._building = true;
+    // w aplikacji na telefonie loadCardHelpers bywa dostępne chwilę później
+    for (let i = 0; i < 50 && !window.loadCardHelpers; i++) await new Promise((res) => setTimeout(res, 100));
     const helpers = await window.loadCardHelpers();
     this._building = false;
     if (key !== this._themeKey) return; // w międzyczasie zmienił się motyw
     let cfg;
     let layers = [];
-    if (key) ({ cfg, layers } = buildThemed(this._config, key));
+    let badges = [];
+    if (key) ({ cfg, layers, badges } = buildThemed(this._config, key));
     else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
@@ -433,17 +619,91 @@ class HaFloorPlanCard extends HTMLElement {
     });
     wrap.appendChild(layer);
 
+    // ikonki światła i temperatury (własna warstwa, skalowana z szerokością mapy)
+    const th2 = key ? THEMES[key] : null;
+    wrap.style.containerType = "inline-size";
+    wrap.style.setProperty("--fp-s", th2 && th2.orient === "pion" ? "clamp(24px, 5.6cqw, 44px)" : "clamp(26px, 2.8cqw, 52px)");
+    const style = document.createElement("style");
+    style.textContent = BADGE_CSS;
+    wrap.appendChild(style);
+    const blayer = document.createElement("div");
+    blayer.className = "fp-badges";
+    this._badges = badges.map((b) => {
+      const el = document.createElement("div");
+      el.style.left = `${b.pos[0]}%`;
+      el.style.top = `${b.pos[1]}%`;
+      if (b.kind === "light") {
+        el.className = "fp-light";
+        el.title = `${b.name} - światło`;
+        el.innerHTML = `<ha-icon icon="${b.icon || "mdi:lightbulb-outline"}"></ha-icon>`;
+        this._bindPress(el, b.entity);
+      } else {
+        el.className = b.below ? "fp-temp fp-below" : "fp-temp";
+        el.title = `${b.name} - temperatura`;
+        el.innerHTML = `<ha-icon icon="mdi:thermometer"></ha-icon><span></span>`;
+        if (b.entity) this._bindPress(el, b.entity, true);
+      }
+      blayer.appendChild(el);
+      return { ...b, el };
+    });
+    wrap.appendChild(blayer);
+
     this.appendChild(wrap);
     this._card = card;
     this._updateLayers();
   }
 
   _updateLayers() {
-    if (!this._layers) return;
-    for (const l of this._layers) {
-      const op = layerOn(l, this._hass) ? "1" : "0";
-      if (l.img.style.opacity !== op) l.img.style.opacity = op;
+    if (this._layers) {
+      for (const l of this._layers) {
+        const op = layerOn(l, this._hass) ? "1" : "0";
+        if (l.img.style.opacity !== op) l.img.style.opacity = op;
+      }
     }
+    if (!this._badges) return;
+    const states = (this._hass && this._hass.states) || {};
+    for (const b of this._badges) {
+      const st = b.entity ? states[b.entity] : null;
+      if (b.kind === "light") {
+        const on = !!st && st.state === "on";
+        b.el.classList.toggle("on", on);
+        b.el.classList.toggle("na", !st || st.state === "unavailable");
+        const icon = b.el.firstChild;
+        const want = b.icon || (on ? "mdi:lightbulb-on" : "mdi:lightbulb-outline");
+        if (icon && icon.getAttribute("icon") !== want) icon.setAttribute("icon", want);
+      } else {
+        const span = b.el.lastChild;
+        const v = st ? parseFloat(st.state) : NaN;
+        let txt = "–";
+        if (!isNaN(v)) txt = `${v.toLocaleString("pl-PL", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}°`;
+        if (span.textContent !== txt) span.textContent = txt;
+        b.el.classList.toggle("cold", !isNaN(v) && v < 18);
+        b.el.classList.toggle("warm", !isNaN(v) && v > 24);
+      }
+    }
+  }
+
+  // klik = przełącz (światło), przytrzymanie / klik w temperaturę = szczegóły encji
+  _bindPress(el, entityId, infoOnly = false) {
+    let timer = null;
+    let held = false;
+    const moreInfo = () => this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId }, bubbles: true, composed: true,
+    }));
+    el.addEventListener("pointerdown", () => {
+      held = false;
+      timer = setTimeout(() => { held = true; moreInfo(); }, 500);
+    });
+    const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
+    el.addEventListener("pointerleave", cancel);
+    el.addEventListener("pointercancel", cancel);
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      cancel();
+      if (held) return;
+      if (infoOnly) { moreInfo(); return; }
+      if (this._hass) this._hass.callService("homeassistant", "toggle", { entity_id: entityId });
+    });
   }
 
   set hass(hass) {
@@ -471,10 +731,10 @@ class HaFloorPlanCard extends HTMLElement {
   }
 }
 
-customElements.define("ha-floor-plan-card", HaFloorPlanCard);
+if (!customElements.get("ha-floor-plan-card")) customElements.define("ha-floor-plan-card", HaFloorPlanCard);
 
 window.customCards = window.customCards || [];
-window.customCards.push({
+if (!window.customCards.some((c) => c.type === "ha-floor-plan-card")) window.customCards.push({
   type: "ha-floor-plan-card",
   name: "Floor Plan Card (mapa domu)",
   description: "Plan domu z podświetlanymi pokojami, bramą i drzwiami. Motywy pór roku i dnia/nocy.",

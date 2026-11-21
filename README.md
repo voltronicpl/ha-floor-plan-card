@@ -31,7 +31,8 @@ Karta sama dobiera wygląd planu (`theme: auto`, domyślnie):
 | Data | Motyw |
 |---|---|
 | 1 marca – 31 sierpnia | lato |
-| 1 września – 30 listopada | jesień |
+| 1 września – 14 listopada | jesień |
+| 15 listopada – 30 listopada | zima (`winter_from_nov15: false` = jesień do końca listopada) |
 | 1 grudnia – 6 stycznia | święta |
 | 7 stycznia – koniec lutego | zima |
 
@@ -60,6 +61,25 @@ variant: 2              # 1 = pierwotny, 2, 3 ... (jeśli nie ma takiego, brany 
 # theme: jesien_noc_pion_3
 ```
 Pliki leżą w `dist/themes/<motyw>/`, a pozycje ikon i nakładek w `dist/themes/themes.json`.
+
+## Edytor wizualny (bez YAML-a)
+
+Edytuj dashboard → kliknij kartę mapy → otworzy się edytor:
+- **Motyw** (automatyczny, klasyczny albo konkretny) i **wariant**
+- przełączniki: ikonki światła, „–” w pokojach bez czujnika, zima od 15 listopada, pełny ekran
+- **każdy z 11 pokoi**: wybór encji światła (`light`/`switch`) i czujnika temperatury
+- **Brama i drzwi**: wybór czujnika (`binary_sensor`) albo napędu (`cover`)
+
+Wyczyszczenie pola chowa dany element. Edytor zapisuje tylko to, co różni się od ustawień domyślnych.
+
+## Ikonki i temperatury
+
+- W każdym pokoju jest okrągła ikonka światła w stylu „szkła”: zgaszona jest szara, zapalona świeci
+  ciepłym bursztynem z łuną (razem z poświatą pokoju). Klik przełącza, przytrzymanie otwiera szczegóły.
+  Wyłączysz je opcją `light_icons: false`.
+- Pod ikonką jest pigułka z temperaturą, np. `21,5°`. Termometr jest niebieski poniżej 18°,
+  zielony w normie i pomarańczowy powyżej 24°. Pokój bez czujnika nic nie pokazuje,
+  a z `show_empty_temp: true` pokazuje `–`. Klik w temperaturę otwiera wykres.
 
 ## Światła, brama i drzwi
 
@@ -90,6 +110,14 @@ views:
         fullscreen: true
 ```
 W widoku „Sekcje” karta też bierze pełną szerokość. Zwykłą kartę dostaniesz przez `fullscreen: false`.
+
+## Telefon (aplikacja Home Assistant)
+
+Karta sama ustala, skąd ją załadowano, i z tego samego miejsca bierze obrazki. Działa więc lokalnie,
+przez Nabu Casa i w aplikacji. Obrazki mają w adresie numer wersji, żeby telefon nie trzymał starych.
+Jeśli po aktualizacji telefon dalej pokazuje błąd albo starą wersję, w aplikacji wejdź w
+**Ustawienia → Aplikacja towarzysząca → Debugowanie → Wyczyść pamięć podręczną frontendu** i otwórz ją ponownie.
+Gdy coś pójdzie nie tak, karta pokaże komunikat błędu zamiast pustego miejsca.
 
 ## Instalacja ręczna
 
@@ -139,7 +167,9 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
 | `theme` | `auto` (domyślnie), `classic` albo nazwa motywu, np. `zima_noc_poziom`. |
 | `variant` | `1`, `2`, `3`: wymusza wariant motywu. Bez tego warianty zmieniają się codziennie. |
-| `light_icons` | `false` (domyślnie): sama poświata. `true`: dodatkowo ikony żarówek. |
+| `light_icons` | `true` (domyślnie): ikonki światła. `false`: sama poświata. |
+| `show_empty_temp` | `true`: pokazuje `–` w pokojach bez czujnika temperatury. |
+| `winter_from_nov15` | `true` (domyślnie): zima od 15 listopada. |
 | `fullscreen` | `true` (domyślnie): bez ramki, dopasowana do okna bez przewijania, zachowane proporcje. `false`: zwykła karta. |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
 | `rooms.<pokój>.light` | Encja światła: włączone = pokój podświetlony. |
