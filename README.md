@@ -47,6 +47,18 @@ theme: zima_noc_poziom   # albo: classic = stary plan (obrazki PNG z dist/)
 ```
 
 Dostępne motywy: `lato|jesien|zima` × `dzien|noc` × `poziom|pion` oraz `swieta` × `dzien|noc` × `szeroki|pion`.
+
+**Warianty.** Niektóre motywy mają kilka wersji (`<motyw>_2`, `<motyw>_3`). Jesień ma po dwie
+wersje każdego motywu, a jesienna noc w pionie aż trzy (`jesien_noc_pion`, `_2`, `_3`, ta z drzewami).
+W trybie `auto` wariant zmienia się **codziennie** (według dnia roku), więc jesień wygląda raz tak, raz inaczej.
+Jeden wariant na stałe:
+
+```yaml
+type: custom:ha-floor-plan-card
+variant: 2              # 1 = pierwotny, 2, 3 ... (jeśli nie ma takiego, brany jest ostatni)
+# albo konkretny motyw:
+# theme: jesien_noc_pion_3
+```
 Pliki leżą w `dist/themes/<motyw>/`, a pozycje ikon i nakładek w `dist/themes/themes.json`.
 
 ## Światła, brama i drzwi
@@ -126,6 +138,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 |---|---|
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
 | `theme` | `auto` (domyślnie), `classic` albo nazwa motywu, np. `zima_noc_poziom`. |
+| `variant` | `1`, `2`, `3`: wymusza wariant motywu. Bez tego warianty zmieniają się codziennie. |
 | `light_icons` | `false` (domyślnie): sama poświata. `true`: dodatkowo ikony żarówek. |
 | `fullscreen` | `true` (domyślnie): bez ramki, dopasowana do okna bez przewijania, zachowane proporcje. `false`: zwykła karta. |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
