@@ -1,0 +1,36 @@
+name: Release
+
+# Przy każdym pushu na main: czyta CARD_VERSION z karty i jeśli tagu vX.Y.Z
+# jeszcze nie ma, tworzy tag i release. HACS pokazuje wtedy numer wersji.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Odczytaj wersję karty
+        id: ver
+        run: |
+          VERSION=$(grep -oP 'CARD_VERSION\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' dist/ha-floor-plan-card.js)
+          if [ -z "$VERSION" ]; then echo "Brak CARD_VERSION w dist/ha-floor-plan-card.js"; exit 1; fi
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Wersja: v$VERSION"
+
+      - name: Utwórz tag i release, jeśli go nie ma
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG już istnieje, nic nie robię."
+            exit 0
+          fi
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
