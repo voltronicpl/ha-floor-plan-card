@@ -24,6 +24,31 @@ Najkrótsza karta (encje są już wpisane w kartę jako domyślne):
 type: custom:ha-floor-plan-card
 ```
 
+## Motywy: pora roku i pora dnia
+
+Karta sama dobiera wygląd planu (`theme: auto`, domyślnie):
+
+| Data | Motyw |
+|---|---|
+| 1 marca – 31 sierpnia | lato |
+| 1 września – 30 listopada | jesień |
+| 1 grudnia – 6 stycznia | święta |
+| 7 stycznia – koniec lutego | zima |
+
+- **Dzień / noc** według `sun.sun`: po zachodzie słońca (`below_horizon`) wersja nocna, zmienia się na żywo.
+- **Orientacja ekranu**: telefon pionowo dostaje plan pionowy (`pion`), a reszta poziomy (`poziom`). Święta w poziomie mają szeroki plan (`szeroki`).
+- Zamknięta brama i drzwi to samo tło, otwarte dostają nakładkę `*_otwarte`.
+
+Wymuszenie jednego motywu:
+
+```yaml
+type: custom:ha-floor-plan-card
+theme: zima_noc_poziom   # albo: classic = stary plan (obrazki PNG z dist/)
+```
+
+Dostępne motywy: `lato|jesien|zima` × `dzien|noc` × `poziom|pion` oraz `swieta` × `dzien|noc` × `szeroki|pion`.
+Pliki leżą w `dist/themes/<motyw>/`, a pozycje ikon i nakładek w `dist/themes/themes.json`.
+
 ## Mapa na cały ekran
 
 Karta sama zdejmuje ramkę i rozciąga się na całą szerokość (`fullscreen: true`, domyślnie).
@@ -88,6 +113,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | Opcja | Opis |
 |---|---|
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
+| `theme` | `auto` (domyślnie), `classic` albo nazwa motywu, np. `zima_noc_poziom`. |
 | `fullscreen` | `true` (domyślnie): bez ramki i odstępów, pełna szerokość, zachowane proporcje. `false`: zwykła karta. |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
 | `rooms.<pokój>.light` | Encja światła: włączone = pokój podświetlony. |
