@@ -13,7 +13,7 @@
  *   drzwi2: cover.drzwi_2
  */
 
-const CARD_VERSION = "1.0.1";
+const CARD_VERSION = "1.0.2";
 
 // Encje z HA Miśka. Używane, gdy w konfiguracji karty nie podasz rooms/covers.
 // Każdą można nadpisać w YAML-u karty.
@@ -159,6 +159,16 @@ class HaFloorPlanCard extends HTMLElement {
     const card = helpers.createCardElement(buildPictureElements(this._config));
     if (this._hass) card.hass = this._hass;
     this.innerHTML = "";
+    // Pełny ekran: karta na całą szerokość, obraz dopasowany do wysokości okna, bez ramki.
+    if (this._config.fullscreen !== false) {
+      this.style.display = "block";
+      this.style.width = "100%";
+      card.style.setProperty("--ha-card-border-width", "0");
+      card.style.setProperty("--ha-card-border-radius", "0");
+      card.style.setProperty("--ha-card-box-shadow", "none");
+      card.style.display = "block";
+      card.style.width = "100%";
+    }
     this.appendChild(card);
     this._card = card;
   }
@@ -166,6 +176,15 @@ class HaFloorPlanCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._card) this._card.hass = hass;
+  }
+
+  // Widok „Sekcje”: karta zajmuje całą szerokość.
+  getGridOptions() {
+    return { columns: "full", rows: "auto" };
+  }
+
+  getLayoutOptions() {
+    return { grid_columns: "full" };
   }
 
   getCardSize() {

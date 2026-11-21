@@ -24,6 +24,26 @@ Najkrótsza karta (encje są już wpisane w kartę jako domyślne):
 type: custom:ha-floor-plan-card
 ```
 
+## Mapa na cały ekran
+
+Karta sama zdejmuje ramkę i rozciąga się na całą szerokość (`fullscreen: true`, domyślnie).
+Żeby zajęła **cały ekran**, a nie małe okienko, widok dashboardu musi być typu **Panel**:
+
+Edytuj dashboard → ołówek przy widoku → **Typ widoku: Panel (pojedyncza karta)**.
+
+Albo w edytorze surowej konfiguracji dashboardu:
+
+```yaml
+views:
+  - title: Mapa
+    path: mapa
+    type: panel
+    cards:
+      - type: custom:ha-floor-plan-card
+        fullscreen: true
+```
+W widoku „Sekcje” karta też bierze pełną szerokość. Zwykłą kartę dostaniesz przez `fullscreen: false`.
+
 ## Instalacja ręczna
 
 1. Skopiuj zawartość `dist/` do `/config/www/mapa/`.
@@ -68,6 +88,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | Opcja | Opis |
 |---|---|
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
+| `fullscreen` | `true` (domyślnie): bez ramki i odstępów, pełna szerokość, zachowane proporcje. `false`: zwykła karta. |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
 | `rooms.<pokój>.light` | Encja światła: włączone = pokój podświetlony. |
 | `rooms.<pokój>.temperature` | Sensor temperatury pod ikoną. |
