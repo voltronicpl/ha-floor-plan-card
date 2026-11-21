@@ -1,0 +1,6 @@
+{
+  "name": "Floor Plan Card (mapa domu)",
+  "filename": "ha-floor-plan-card.js",
+  "render_readme": true,
+  "homeassistant": "2023.1.0"
+}
