@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.6";
+const CARD_VERSION = "1.6.7";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -1511,18 +1511,29 @@ class HaFloorPlanCard extends HTMLElement {
     wrap.style.position = "relative";
     wrap.style.display = "block";
     const full = this._config.fullscreen !== false;
+    let stage = null;
     if (full) {
       this.style.display = "block";
       this.style.width = "100%";
       card.style.setProperty("--ha-card-border-width", "0");
       card.style.setProperty("--ha-card-border-radius", "0");
       card.style.setProperty("--ha-card-box-shadow", "none");
-      // Dopasowanie do ekranu: cały obraz mieści się w oknie bez przewijania
-      // (wysokość okna minus górny pasek HA), proporcje zachowane, wyśrodkowany.
+      // Pełny ekran: scena = całe okno pod paskiem HA (bez przewijania). Mapa wyśrodkowana i powiększona
+      // tak, żeby wypełnić scenę (cover), ale najwyżej fullscreen_zoom × (domyślnie 1 = nic nie ucięte; np. 1,1 = lekkie przycięcie brzegów),
+      // żeby nie uciąć bramy ani domu. Resztę (np. składany telefon, tablet) wypełnia rozmyte tło mapy.
       const th = key ? THEMES[key] : null;
-      const aspect = th ? th.w / th.h : 1933 / 814;
-      wrap.style.maxWidth = `calc((100dvh - var(--header-height, 56px) - env(safe-area-inset-top, 0px)) * ${aspect.toFixed(4)})`;
-      wrap.style.margin = "0 auto";
+      const aspect = (th ? th.w / th.h : 1933 / 814).toFixed(4);
+      const zoom = Math.max(1, Number(this._config.fullscreen_zoom) || 1).toFixed(3);
+      const H = "(100dvh - var(--header-height, 56px) - env(safe-area-inset-top, 0px))";
+      stage = document.createElement("div");
+      stage.className = "fp-stage";
+      Object.assign(stage.style, { position: "relative", width: "100%", height: `calc${H}`, overflow: "hidden" });
+      const blur = document.createElement("div");
+      Object.assign(blur.style, { position: "absolute", inset: "-80px", background: `center / cover no-repeat url("${cfg.image}")`,
+        filter: "blur(40px) brightness(0.6) saturate(0.8)", pointerEvents: "none" });
+      stage.appendChild(blur);
+      Object.assign(wrap.style, { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+        width: `min(max(100%, ${H} * ${aspect}), ${zoom} * min(100%, ${H} * ${aspect}))`, margin: "0" });
     }
     card.style.display = "block";
     card.style.width = "100%";
@@ -1680,7 +1691,7 @@ class HaFloorPlanCard extends HTMLElement {
     wrap.appendChild(blayer);
     const cornerBelow = this._addCornerCard(helpers, wrap, corner);
 
-    this.appendChild(wrap);
+    if (stage) { stage.appendChild(wrap); this.appendChild(stage); } else this.appendChild(wrap);
     if (cornerBelow) this.appendChild(cornerBelow);
     this._card = card;
     this._updateLayers();
