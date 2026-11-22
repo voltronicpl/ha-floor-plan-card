@@ -68,7 +68,10 @@ Edytuj dashboard → kliknij kartę mapy → otworzy się edytor:
 - **Motyw** (automatyczny, klasyczny albo konkretny) i **wariant**
 - przełączniki: ikonki światła, „–” w pokojach bez czujnika, zima od 15 listopada, pełny ekran
 - **każdy z 11 pokoi**: wybór encji światła (`light`/`switch`) i czujnika temperatury
-- **Brama i drzwi**: wybór czujnika (`binary_sensor`) albo napędu (`cover`)
+- **Brama, drzwi i kamery** (pod listą pokoi): pola z podpowiedzią **wszystkich encji z HA**.
+  Zacznij pisać, np. `brama` albo `switch.`, i wybierz z listy albo wpisz `entity_id` ręcznie.
+  Pod polem widać aktualny stan encji, więc od razu wiesz, co wpisać jako stan „otwarta”.
+  Na górze tej sekcji jest numer wersji karty, po którym poznasz, czy telefon ma już nową wersję.
 
 Wyczyszczenie pola chowa dany element. Edytor zapisuje tylko to, co różni się od ustawień domyślnych.
 
@@ -84,6 +87,8 @@ Wyczyszczenie pola chowa dany element. Edytor zapisuje tylko to, co różni się
 ## Kamery
 
 Na planie są trzy podglądy kamer, odświeżane co 10 s. Klik otwiera podgląd na żywo.
+Kamery przylegają do domu: przód i wejście dotykają dolnej ściany i są rozciągnięte w dół
+(w pionie stoją obok siebie na całą szerokość), a tył dotyka górnej ściany w lewym rogu.
 
 | Miejsce | Domyślna kamera |
 |---|---|
@@ -96,7 +101,7 @@ Rozmiar ustawia `camera_size` (w % szerokości mapy, domyślnie 15, a w pionie 3
 
 ## Brama: stan i otwieranie
 
-- **Stan bramy:** w edytorze wybierz encję (`binary_sensor`, `cover`, `sensor`, `switch`, `input_boolean`)
+- **Stan bramy:** w edytorze wybierz dowolną encję (`binary_sensor`, `cover`, `sensor`, `switch`…)
   i wpisz, jaki stan oznacza „otwarta” (np. `open` albo `on`, kilka po przecinku). Każdy inny stan to zamknięta.
   Otwarta brama jest na planie fizycznie otwarta, a jej przycisk robi się czerwony. To samo pole jest dla drzwi.
 - **Otwieranie:** **przytrzymaj** przycisk bramy (domyślnie 1 s, pasek pokazuje postęp, ustawia się w `gate_hold_ms`).

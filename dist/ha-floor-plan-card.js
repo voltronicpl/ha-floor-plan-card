@@ -21,7 +21,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.5.1";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -337,21 +337,44 @@ function buildThemed(config, key) {
   }
 
   // kamery: miniatury pod bramą / pod drzwiami głównymi / w lewym górnym rogu
+  // Obrys domu z pól pokoi i drzwi: kamery przylegają do niego.
+  const roomBoxes = Object.values(th.rooms || {}).map((x) => x.light && x.light.box).filter(Boolean);
+  const coverBoxes = Object.values(th.covers || {}).map((x) => x.open && x.open.box).filter(Boolean);
+  const houseTop = Math.min(...roomBoxes.map((b) => b[1]));
+  const houseLeft = Math.min(...roomBoxes.map((b) => b[0]));
+  const houseBottom = coverBoxes.length
+    ? Math.max(...coverBoxes.map((b) => b[1] + b[3]))
+    : Math.max(...roomBoxes.map((b) => b[1] + b[3])) + 5;
+  const ratio = th.h / th.w; // wysokość/szerokość obrazka
+  const maxW = Number(config.camera_size) || (portrait ? 48.5 : 24); // % szerokości mapy
+  // rozmiar 16:9 w procentach obrazka: z wysokości (%H) wylicz szerokość (%W), przytnij do maxW
+  const fit = (hPct) => {
+    let w = (hPct * ratio * 16) / 9;
+    let h = hPct;
+    if (w > maxW) { w = maxW; h = (w * 9) / 16 / ratio; }
+    return [w, h];
+  };
   const cams = { ...DEFAULT_CAMERAS, ...(config.cameras || {}) };
   for (const [camKey, def] of Object.entries(CAMERAS)) {
     const entity = cams[camKey];
     if (!entity) continue;
-    let pos;
-    let corner = false;
+    let rect;
     if (def.anchor === "corner") {
-      pos = [1.5, 2.5];
-      corner = true;
+      // tył: lewy górny róg, dolną krawędzią dotyka ściany domu
+      const [w, h] = fit(Math.max(4, houseTop - 1.5));
+      rect = [Math.max(0.5, houseLeft), houseTop - h, w, h];
     } else {
+      // przód / wejście: górną krawędzią dotyka domu, rozciągnięte w dół do krawędzi obrazka
       const tc = th.covers && th.covers[def.anchor];
       if (!tc) continue;
-      pos = [tc.icon[0], tc.icon[1] + (portrait ? 2.2 : 4.5)];
+      const avail = Math.max(4, 98.5 - houseBottom);
+      const [w, h169] = fit(avail);
+      const h = Math.min(avail, h169 * 1.6); // rozciągnięte w dół (obraz kadrowany), max 1,6× wysokości 16:9
+      let l = Math.min(Math.max(0.5, tc.icon[0] - w / 2), 99.5 - w);
+      if (portrait) l = def.anchor === "brama" ? 0.5 : 51; // w pionie dwie kamery obok siebie
+      rect = [l, houseBottom, w, h];
     }
-    badges.push({ kind: "camera", entity, name: def.name, pos, corner });
+    badges.push({ kind: "camera", entity, name: def.name, pos: [rect[0], rect[1]], size: [rect[2], rect[3]] });
   }
 
   // większe strefy pod spodem, mniejsze na wierzchu (np. warsztat wewnątrz prostokąta salonu)
@@ -441,10 +464,9 @@ const BADGE_CSS = `
   font: 600 15px/1 inherit; }
 .fp-no { background: rgba(127, 127, 127, 0.25); color: inherit; }
 .fp-yes { background: #e0533f; color: #fff; }
-.fp-cam { position: absolute; pointer-events: auto; cursor: pointer; transform: translate(-50%, 0);
-  width: var(--fp-cam-w); aspect-ratio: 16 / 9; border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
+.fp-cam { position: absolute; pointer-events: auto; cursor: pointer; box-sizing: border-box;
+  border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
   background: #0b0f15; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
-.fp-cam.fp-corner { transform: none; }
 .fp-cam img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .fp-cam.na img { visibility: hidden; }
 .fp-cam-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 3px;
@@ -470,12 +492,12 @@ class HaFloorPlanCardEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
+    if (this._extra) this._renderExtra();
   }
 
   _data() {
     const c = this._config || {};
     const rooms = { ...DEFAULT_ROOMS, ...(c.rooms || {}) };
-    const covers = { ...DEFAULT_COVERS, ...(c.covers || {}) };
     const d = {
       theme: c.theme || "auto",
       variant: c.variant ? String(c.variant) : "auto",
@@ -489,19 +511,12 @@ class HaFloorPlanCardEditor extends HTMLElement {
       d[`${k}__light`] = r.light || "";
       d[`${k}__temperature`] = r.temperature || "";
     }
-    for (const k of EDITOR_COVERS) d[`cover__${k}`] = covers[k] || "";
-    for (const k of EDITOR_COVERS) d[`open__${k}`] = (c.open_states && c.open_states[k]) || "";
-    d.gate_action = c.gate_action || "";
-    d.gate_hold_ms = Number(c.gate_hold_ms) || 1000;
-    const cams = { ...DEFAULT_CAMERAS, ...(c.cameras || {}) };
-    for (const k of Object.keys(CAMERAS)) d[`camera__${k}`] = cams[k] || "";
     return d;
   }
 
   _schema() {
     const lightSel = { entity: { domain: ["light", "switch"] } };
     const tempSel = { entity: { domain: "sensor" } };
-    const coverSel = { entity: { domain: ["binary_sensor", "cover", "sensor", "switch", "input_boolean", "lock"] } };
     return [
       {
         type: "grid", name: "", schema: [
@@ -527,21 +542,6 @@ class HaFloorPlanCardEditor extends HTMLElement {
           { name: `${k}__temperature`, selector: tempSel },
         ],
       })),
-      {
-        type: "expandable", flatten: true, title: "Brama i drzwi", icon: "mdi:garage",
-        schema: [
-          ...EDITOR_COVERS.flatMap((k) => [
-            { name: `cover__${k}`, selector: coverSel },
-            { name: `open__${k}`, selector: { text: {} } },
-          ]),
-          { name: "gate_action", selector: { entity: { domain: ["cover", "button", "input_button", "switch", "script", "input_boolean"] } } },
-          { name: "gate_hold_ms", selector: { number: { min: 300, max: 5000, step: 100, mode: "box", unit_of_measurement: "ms" } } },
-        ],
-      },
-      {
-        type: "expandable", flatten: true, title: "Kamery", icon: "mdi:cctv",
-        schema: Object.keys(CAMERAS).map((k) => ({ name: `camera__${k}`, selector: { entity: { domain: "camera" } } })),
-      },
     ];
   }
 
@@ -582,31 +582,146 @@ class HaFloorPlanCardEditor extends HTMLElement {
       if (!light && !temperature) { if (DEFAULT_ROOMS[k]) rooms[k] = false; continue; }
       rooms[k] = { ...(light ? { light } : {}), ...(temperature ? { temperature } : {}) };
     }
-    const covers = {};
-    for (const k of EDITOR_COVERS) {
-      const e = d[`cover__${k}`] || undefined;
-      if (e === DEFAULT_COVERS[k]) continue;
-      if (!e) { if (DEFAULT_COVERS[k]) covers[k] = false; continue; }
-      covers[k] = e;
-    }
     c.rooms = Object.keys(rooms).length ? rooms : undefined;
-    c.covers = Object.keys(covers).length ? covers : undefined;
-    const open = {};
-    for (const k of EDITOR_COVERS) if (d[`open__${k}`]) open[k] = d[`open__${k}`];
-    c.open_states = Object.keys(open).length ? open : undefined;
-    c.gate_action = d.gate_action || undefined;
-    c.gate_hold_ms = d.gate_hold_ms && Number(d.gate_hold_ms) !== 1000 ? Number(d.gate_hold_ms) : undefined;
-    const cameras = {};
-    for (const k of Object.keys(CAMERAS)) {
-      const e = d[`camera__${k}`] || undefined;
-      if (e === DEFAULT_CAMERAS[k]) continue;
-      if (!e) { if (DEFAULT_CAMERAS[k]) cameras[k] = false; continue; }
-      cameras[k] = e;
-    }
-    c.cameras = Object.keys(cameras).length ? cameras : undefined;
+    this._emit(c);
+  }
+
+  _emit(c) {
     for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
     this._config = c;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: c }, bubbles: true, composed: true }));
+  }
+
+  // ---- Brama, drzwi i kamery: własne pola z listą WSZYSTKICH encji (wyszukiwanie + ręczne wpisanie) ----
+  _extraFields() {
+    const c = this._config || {};
+    const covers = { ...DEFAULT_COVERS, ...(c.covers || {}) };
+    const cams = { ...DEFAULT_CAMERAS, ...(c.cameras || {}) };
+    const os = c.open_states || {};
+    return [
+      { group: "Brama garażowa", icon: "mdi:garage", fields: [
+        { id: "cover.brama", label: "Stan bramy (dowolna encja: binary_sensor, cover, sensor, switch…)", value: covers.brama || "", entity: true },
+        { id: "open.brama", label: "Który stan oznacza „otwarta” (np. on, open; kilka po przecinku; puste = on/open/opening)", value: os.brama || "" },
+        { id: "gate_action", label: "Otwieranie bramy – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.gate_action || "", entity: true },
+        { id: "gate_hold_ms", label: "Przytrzymanie przycisku bramy przed pytaniem (ms)", value: String(Number(c.gate_hold_ms) || 1000), number: true },
+      ] },
+      { group: "Drzwi", icon: "mdi:door", fields: [
+        { id: "cover.drzwi1", label: "Drzwi wejściowe 1 (przy garażu) – stan", value: covers.drzwi1 || "", entity: true },
+        { id: "open.drzwi1", label: "Drzwi 1: stan „otwarte”", value: os.drzwi1 || "" },
+        { id: "cover.drzwi2", label: "Drzwi wejściowe 2 (główne) – stan", value: covers.drzwi2 || "", entity: true },
+        { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
+      ] },
+      { group: "Kamery", icon: "mdi:cctv", fields: Object.keys(CAMERAS).map((k) => (
+        { id: `camera.${k}`, label: CAMERAS[k].name, value: cams[k] || "", entity: true })) },
+    ];
+  }
+
+  _extraChanged(id, raw) {
+    const v = String(raw || "").trim();
+    const c = { ...this._config };
+    const [kind, key] = id.split(".");
+    const setMap = (mapName, defaults) => {
+      const m = { ...(c[mapName] || {}) };
+      if (v === (defaults[key] || "")) delete m[key];
+      else if (!v) m[key] = defaults[key] ? false : undefined;
+      else m[key] = v;
+      for (const k of Object.keys(m)) if (m[k] === undefined) delete m[k];
+      c[mapName] = Object.keys(m).length ? m : undefined;
+    };
+    if (kind === "cover") setMap("covers", DEFAULT_COVERS);
+    else if (kind === "camera") setMap("cameras", DEFAULT_CAMERAS);
+    else if (kind === "open") {
+      const m = { ...(c.open_states || {}) };
+      if (v) m[key] = v; else delete m[key];
+      c.open_states = Object.keys(m).length ? m : undefined;
+    } else if (id === "gate_action") c.gate_action = v || undefined;
+    else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
+    this._emit(c);
+  }
+
+  _renderExtra() {
+    if (!this._extra) {
+      this._listId = `fp-ents-${Math.random().toString(36).slice(2, 8)}`;
+      this._extra = document.createElement("div");
+      this._extra.className = "fp-ed";
+      const st = document.createElement("style");
+      st.textContent = `
+.fp-ed { margin-top: 16px; font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif); }
+.fp-ed details { border: 1px solid var(--divider-color, #444); border-radius: 12px; margin: 8px 0; padding: 4px 12px 10px; }
+.fp-ed summary { cursor: pointer; padding: 8px 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.fp-ed label { display: block; font-size: 12px; color: var(--secondary-text-color, #aaa); margin: 10px 0 4px; }
+.fp-ed input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+  border: 1px solid var(--divider-color, #555); background: var(--card-background-color, #1c1f26); color: var(--primary-text-color, #fff); }
+.fp-ed input:focus { outline: 2px solid var(--primary-color, #03a9f4); border-color: transparent; }
+.fp-ed .fp-ver { font-size: 12px; color: var(--secondary-text-color, #aaa); margin-bottom: 6px; }
+.fp-ed .fp-state { font-size: 12px; color: var(--secondary-text-color, #aaa); margin-top: 4px; }`;
+      this._extra.appendChild(st);
+      this._extraBody = document.createElement("div");
+      this._extra.appendChild(this._extraBody);
+      this._datalist = document.createElement("datalist");
+      this._datalist.id = this._listId;
+      this._extra.appendChild(this._datalist);
+      this.appendChild(this._extra);
+    }
+    // lista wszystkich encji z HA (bez filtra domen) – przeglądarka filtruje po wpisanym tekście
+    const states = (this._hass && this._hass.states) || {};
+    const ids = Object.keys(states).sort();
+    if (this._datalist.childElementCount !== ids.length) {
+      this._datalist.innerHTML = "";
+      for (const id of ids) {
+        const o = document.createElement("option");
+        o.value = id;
+        const fn = states[id].attributes && states[id].attributes.friendly_name;
+        if (fn) o.label = fn;
+        this._datalist.appendChild(o);
+      }
+    }
+    // przebuduj pola tylko po zmianie konfiguracji (nie przy każdej zmianie stanów w HA)
+    const cfgKey = JSON.stringify(this._config || {});
+    if (cfgKey === this._extraCfgKey) {
+      this._updateStates();
+      return;
+    }
+    this._extraCfgKey = cfgKey;
+    this._extraBody.innerHTML = `<div class="fp-ver">Mapa domu v${CARD_VERSION}</div>`;
+    for (const g of this._extraFields()) {
+      const det = document.createElement("details");
+      det.open = true;
+      det.innerHTML = `<summary><ha-icon icon="${g.icon}"></ha-icon><span></span></summary>`;
+      det.querySelector("span").textContent = g.group;
+      for (const f of g.fields) {
+        const lab = document.createElement("label");
+        lab.textContent = f.label;
+        const inp = document.createElement("input");
+        inp.value = f.value;
+        inp.dataset.id = f.id;
+        if (f.entity) { inp.setAttribute("list", this._listId); inp.placeholder = "zacznij pisać, np. brama, sensor., switch."; }
+        if (f.number) { inp.type = "number"; inp.min = "300"; inp.max = "5000"; inp.step = "100"; }
+        inp.autocomplete = "off";
+        inp.addEventListener("change", () => this._extraChanged(f.id, inp.value));
+        det.appendChild(lab);
+        det.appendChild(inp);
+        if (f.entity) {
+          const stl = document.createElement("div");
+          stl.className = "fp-state";
+          stl.dataset.for = f.id;
+          det.appendChild(stl);
+        }
+      }
+      this._extraBody.appendChild(det);
+    }
+    this._updateStates();
+  }
+
+  // pod polem encji pokazuje jej aktualny stan – od razu widać, co wpisać jako „otwarta”
+  _updateStates() {
+    const states = (this._hass && this._hass.states) || {};
+    for (const el of this._extraBody.querySelectorAll(".fp-state")) {
+      const inp = this._extraBody.querySelector(`input[data-id="${el.dataset.for}"]`);
+      const id = inp && inp.value.trim();
+      const st = id ? states[id] : null;
+      el.textContent = !id ? "" : st ? `Aktualny stan: ${st.state}` : "Nie ma takiej encji w HA";
+    }
   }
 
   async _render() {
@@ -628,6 +743,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = this._schema();
     this._form.data = this._data();
+    this._renderExtra();
   }
 }
 
@@ -767,8 +883,6 @@ class HaFloorPlanCard extends HTMLElement {
     wrap.style.containerType = "inline-size";
     const pion = th2 && th2.orient === "pion";
     wrap.style.setProperty("--fp-s", pion ? "clamp(24px, 5.6cqw, 44px)" : "clamp(26px, 2.8cqw, 52px)");
-    const camW = this._config.camera_size || (pion ? 30 : 15); // % szerokości mapy
-    wrap.style.setProperty("--fp-cam-w", `clamp(90px, ${camW}cqw, 420px)`);
     const style = document.createElement("style");
     style.textContent = BADGE_CSS;
     wrap.appendChild(style);
@@ -784,7 +898,9 @@ class HaFloorPlanCard extends HTMLElement {
         el.innerHTML = `<ha-icon icon="mdi:garage"></ha-icon><div class="fp-hold"></div>`;
         this._bindGate(el, b);
       } else if (b.kind === "camera") {
-        el.className = b.corner ? "fp-cam fp-corner" : "fp-cam";
+        el.className = "fp-cam";
+        el.style.width = `${b.size[0]}%`;
+        el.style.height = `${b.size[1]}%`;
         el.title = b.name;
         el.innerHTML = `<img alt=""><div class="fp-cam-label"><ha-icon icon="mdi:cctv"></ha-icon><span></span></div>`;
         el.querySelector("span").textContent = b.name.replace(/^Kamera /, "");
