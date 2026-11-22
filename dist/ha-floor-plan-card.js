@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.4";
+const CARD_VERSION = "1.6.5";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -412,6 +412,8 @@ function buildThemed(config, key) {
   const inFence = config.gate_in_fence !== false;
   let fenceGate = null;
   let fenceWicket = null;
+  // luki w płocie z tła (pod bramą i furtką): x0, x1 w % szerokości; zamalowane śniegiem/trawą sprzed płotu
+  const fenceGaps = [];
   if (inFence) {
     const gb = th.covers && th.covers.brama && th.covers.brama.open && th.covers.brama.open.box;
     const db = th.covers && th.covers.drzwi2 && th.covers.drzwi2.open && th.covers.drzwi2.open.box;
@@ -422,11 +424,15 @@ function buildThemed(config, key) {
       const leftPx = cx - (L / 2 + 12 + L + 3) * u;
       fenceGate = { L, rect: [leftPx / th.w * 100, (fenceY / 100 * th.h - 92 * u) / th.h * 100, (2 * L + 32) * u / th.w * 100],
         right: (cx + (L / 2 + 24) * u) / th.w * 100 };
+      // między słupkami (słupki 0..12 i L+12..L+24, początek rysunku przesunięty o L+3)
+      fenceGaps.push([(leftPx + (L + 3 + 9) * u) / th.w * 100, (leftPx + (2 * L + 15 + 3) * u) / th.w * 100]);
     }
     if (db) {
       const uw = (74 * u) / 66;
       const cx = (db[0] + db[2] * 0.37) / 100 * th.w;
       fenceWicket = [(cx - 41 * uw) / th.w * 100, (fenceY / 100 * th.h - 84 * uw) / th.h * 100, 86 * uw / th.w * 100];
+      // słupki 0..10 i 56..66, początek rysunku przesunięty o 8
+      fenceGaps.push([(cx - 41 * uw + 15 * uw) / th.w * 100, (cx - 41 * uw + 67 * uw) / th.w * 100]);
     }
   }
   const cams = { ...DEFAULT_CAMERAS, ...(config.cameras || {}) };
@@ -521,6 +527,11 @@ function buildThemed(config, key) {
     },
     layers,
     badges,
+    // łata tła w luce płotu: od górnej krawędzi płotu do dołu obrazka, kopiowana z pasa nad płotem
+    fenceGaps: config.fence_gap === false || !fenceGaps.length ? [] : fenceGaps.map(([x0, x1]) => {
+      const top = Math.max(0, fenceY - (postPx / th.h * 100) * 1.12);
+      return { x0, x1, top, src: 1.2 }; // src = wysokość pasa nad płotem rozciąganego w dół (%)
+    }),
     // miejsce na kartę w prawym górnym rogu nad domem (w pionie: null = pod mapą)
     // od prawego górnego narożnika mapy aż do dachu; z lewej do kamery „tył”
     corner: portrait ? null : {
@@ -1484,7 +1495,8 @@ class HaFloorPlanCard extends HTMLElement {
     let layers = [];
     let badges = [];
     let corner = null;
-    if (key) ({ cfg, layers, badges, corner } = buildThemed(this._config, key));
+    let fenceGaps = [];
+    if (key) ({ cfg, layers, badges, corner, fenceGaps } = buildThemed(this._config, key));
     else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
@@ -1515,6 +1527,24 @@ class HaFloorPlanCard extends HTMLElement {
 
     const layer = document.createElement("div");
     Object.assign(layer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" });
+    // usuń kawałek płotu z tła pod bramą i furtką: kopia tła przesunięta w dół (śnieg/trawa sprzed płotu),
+    // przycięta do luki między słupkami, z miękką górną krawędzią
+    for (const g of fenceGaps || []) {
+      const patch = document.createElement("div");
+      const clip = `inset(${g.top}% ${100 - g.x1}% 0 ${g.x0}%)`;
+      const fade = `linear-gradient(to bottom, transparent ${Math.max(0, g.top - 0.8)}%, #000 ${g.top + 1.2}%)`;
+      Object.assign(patch.style, { position: "absolute", inset: "0", clipPath: clip, webkitClipPath: clip,
+        maskImage: fade, webkitMaskImage: fade });
+      const img = document.createElement("img");
+      img.src = cfg.image;
+      img.alt = "";
+      img.draggable = false;
+      Object.assign(img.style, { position: "absolute", inset: "0", width: "100%", height: "100%",
+        transformOrigin: `50% ${g.top - g.src}%`, transform: `translateY(${g.src}%) scaleY(${(100 - g.top) / g.src})`,
+        filter: "blur(1.5px)" });
+      patch.appendChild(img);
+      layer.appendChild(patch);
+    }
     this._layers = layers.map((l) => {
       if (l.poly) {
         // narysowany obszar: rozjaśniona kopia tła + ciepła plama, obie przycięte do wielokąta
