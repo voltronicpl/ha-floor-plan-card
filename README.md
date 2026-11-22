@@ -81,9 +81,42 @@ Wyczyszczenie pola chowa dany element. Edytor zapisuje tylko to, co różni się
   zielony w normie i pomarańczowy powyżej 24°. Pokój bez czujnika nic nie pokazuje,
   a z `show_empty_temp: true` pokazuje `–`. Klik w temperaturę otwiera wykres.
 
+## Kamery
+
+Na planie są trzy podglądy kamer, odświeżane co 10 s. Klik otwiera podgląd na żywo.
+
+| Miejsce | Domyślna kamera |
+|---|---|
+| pod bramą (`przod`) | `camera.dwor_przod` |
+| pod drzwiami głównymi (`wejscie`) | `camera.zewnatrz_niska_rozdzielczosc` |
+| lewy górny róg, tył (`tyl`) | `camera.dwor_tyl_lewy` |
+
+Zmienisz je w edytorze (sekcja „Kamery”) albo w YAML-u: `cameras: { przod: camera.x, tyl: false }`.
+Rozmiar ustawia `camera_size` (w % szerokości mapy, domyślnie 15, a w pionie 30).
+
+## Brama: stan i otwieranie
+
+- **Stan bramy:** w edytorze wybierz encję (`binary_sensor`, `cover`, `sensor`, `switch`, `input_boolean`)
+  i wpisz, jaki stan oznacza „otwarta” (np. `open` albo `on`, kilka po przecinku). Każdy inny stan to zamknięta.
+  Otwarta brama jest na planie fizycznie otwarta, a jej przycisk robi się czerwony. To samo pole jest dla drzwi.
+- **Otwieranie:** **przytrzymaj** przycisk bramy (domyślnie 1 s, pasek pokazuje postęp, ustawia się w `gate_hold_ms`).
+  Pojawi się pytanie **„Na pewno otworzyć bramę?”** z przyciskami Tak i Nie. Po „Tak” karta wywołuje encję
+  z pola „Otwieranie bramy” (`gate_action`): `cover` otwiera albo zamyka, `button` naciska, `switch` i `script` włącza.
+  Krótki klik w przycisk pokazuje szczegóły.
+
+```yaml
+covers:
+  brama: cover.brama_garazowa
+open_states:
+  brama: open
+gate_action: switch.sterownik_bram_l1
+gate_hold_ms: 1000
+```
+
 ## Światła, brama i drzwi
 
 - **Światło** widać jako realistyczną poświatę: pokój płynnie się rozjaśnia i gaśnie (0,6 s).
+  Ciepła plama światła wokół lampy jest przycięta do kształtu pokoju, więc nie wylewa się za ściany.
   Ikon żarówek domyślnie nie ma. **Klik w dowolne miejsce pokoju** włącza i wyłącza światło,
   a przytrzymanie otwiera szczegóły. Ikony wrócą po ustawieniu `light_icons: true`.
 - **Brama i drzwi** pokazują prawdziwy stan z czujników: `on` (otwarte) to otwarta brama
@@ -139,7 +172,7 @@ Domyślne encje (wbudowane w kartę, każdą można nadpisać):
 | kuchnia | `light.kuchnia_swiatlo_grupa` | – |
 | korytarz | `light.swiatlo_korytarz_wjsxie` | – |
 | garderoba | `light.garderoba_swiatlo` | – |
-| brama | `binary_sensor.brama` | – |
+| brama | – (wybierz w edytorze) | – |
 | drzwi1 | `binary_sensor.czujnik_drzwi_garaz_contact` | – |
 | drzwi2 | `binary_sensor.czujnik_drzwi_glowne_contact` | – |
 
@@ -167,6 +200,11 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `base_path` | Folder z obrazkami. Domyślnie `/hacsfiles/ha-floor-plan-card`. |
 | `theme` | `auto` (domyślnie), `classic` albo nazwa motywu, np. `zima_noc_poziom`. |
 | `variant` | `1`, `2`, `3`: wymusza wariant motywu. Bez tego warianty zmieniają się codziennie. |
+| `cameras` | `{ przod, wejscie, tyl }`: encje `camera.*`, `false` chowa. |
+| `camera_size` | Szerokość podglądu kamery w % mapy. |
+| `open_states` | `{ brama: "open", drzwi1: "on" }`: stan oznaczający „otwarte”. |
+| `gate_action` | Encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
+| `gate_hold_ms` | Jak długo przytrzymać bramę (ms, domyślnie 1000). |
 | `light_icons` | `true` (domyślnie): ikonki światła. `false`: sama poświata. |
 | `show_empty_temp` | `true`: pokazuje `–` w pokojach bez czujnika temperatury. |
 | `winter_from_nov15` | `true` (domyślnie): zima od 15 listopada. |

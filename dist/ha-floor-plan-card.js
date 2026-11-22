@@ -14,11 +14,14 @@
  * theme: auto            (domyślnie) | classic | np. zima_noc_poziom
  * variant: 1|2|3        (opcjonalnie; bez tego warianty zmieniają się codziennie)
  * light_icons: true      (domyślnie; false = sama poświata bez ikon)
+ * open_states: { brama: "open", drzwi1: "on" }  (stan oznaczający otwarte)
+ * gate_action: switch.sterownik_bramy  (co wywołać po „Tak”), gate_hold_ms: 1000
+ * cameras: { przod, wejscie, tyl }   (encje camera.*, false = ukryj)
  * show_empty_temp: false (true = „–” w pokojach bez czujnika temperatury)
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.5.0";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -39,16 +42,28 @@ const DEFAULT_ROOMS = {
   korytarz:  { light: "light.swiatlo_korytarz_wjsxie" },
   garderoba: { light: "light.garderoba_swiatlo" },
 };
+// Brama nie ma domyślnej encji (binary_sensor.brama nie pokazywał stanu) – wybierz ją w edytorze.
 const DEFAULT_COVERS = {
-  brama:  "binary_sensor.brama",
   drzwi1: "binary_sensor.czujnik_drzwi_garaz_contact",
   drzwi2: "binary_sensor.czujnik_drzwi_glowne_contact",
+};
+
+// Kamery na planie: przód pod bramą, wejście pod drzwiami głównymi, tył w lewym górnym rogu.
+const CAMERAS = {
+  przod:   { name: "Kamera przód (brama)", anchor: "brama" },
+  wejscie: { name: "Kamera wejście (drzwi główne)", anchor: "drzwi2" },
+  tyl:     { name: "Kamera tył (lewy róg)", anchor: "corner" },
+};
+const DEFAULT_CAMERAS = {
+  przod:   "camera.dwor_przod",
+  wejscie: "camera.zewnatrz_niska_rozdzielczosc",
+  tyl:     "camera.dwor_tyl_lewy",
 };
 
 // Realistyczna poświata: światło widać jako rozjaśniony pokój z ciepłą łuną.
 // Ikony żarówek są domyślnie niewidoczne, ale dalej da się w nie kliknąć
 // (klik w środek pokoju = włącz/wyłącz). light_icons: true pokazuje je.
-const GLOW_FILTER = "drop-shadow(0 0 14px rgba(255,190,110,0.55)) saturate(1.08)";
+const GLOW_FILTER = "saturate(1.08)"; // bez drop-shadow: poświata nie wylewa się za ściany
 function lightIconStyle(config, base) {
   if (config.light_icons !== false) return base;
   return { ...base, opacity: "0", "--mdc-icon-size": "56px", background: "transparent" };
@@ -264,7 +279,8 @@ function buildThemed(config, key) {
     const [tl, tt] = tr.temp || [il, it + 4];
     if (room.light && tr.light) {
       const b = tr.light.box;
-      layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}${ASSET_Q}`, box: b });
+      layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}${ASSET_Q}`, box: b,
+        center: [((il - b[0]) / b[2]) * 100, ((it - b[1]) / b[3]) * 100] });
       // niewidoczna strefa na cały pokój: klik = włącz/wyłącz, przytrzymanie = szczegóły
       taps.push({
         area: b[2] * b[3],
@@ -292,9 +308,19 @@ function buildThemed(config, key) {
   for (const [ck, def] of Object.entries(COVERS)) {
     const entity = covers[ck];
     const tc = th.covers && th.covers[ck];
-    if (!entity || !tc) continue;
-    const isSensor = entity.startsWith("binary_sensor.");
-    if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}${ASSET_Q}`, box: tc.open.box });
+    if (!tc) continue;
+    if (!entity) {
+      if (ck === "brama" && config.gate_action) badges.push({ kind: "gate", entity: null, name: def.name, pos: tc.icon, openStates: [] });
+      continue;
+    }
+    const isSensor = !entity.startsWith("cover.");
+    const openStates = openStatesFor(config, ck);
+    if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}${ASSET_Q}`, box: tc.open.box, openStates });
+    if (ck === "brama") {
+      // brama: własny przycisk (klik = szczegóły, przytrzymanie = potwierdzenie i otwarcie)
+      badges.push({ kind: "gate", entity, name: def.name, pos: tc.icon, openStates });
+      continue;
+    }
     controls.push({
       type: "state-icon",
       entity,
@@ -308,6 +334,24 @@ function buildThemed(config, key) {
         "--mdc-icon-size": portrait ? "26px" : "32px",
       },
     });
+  }
+
+  // kamery: miniatury pod bramą / pod drzwiami głównymi / w lewym górnym rogu
+  const cams = { ...DEFAULT_CAMERAS, ...(config.cameras || {}) };
+  for (const [camKey, def] of Object.entries(CAMERAS)) {
+    const entity = cams[camKey];
+    if (!entity) continue;
+    let pos;
+    let corner = false;
+    if (def.anchor === "corner") {
+      pos = [1.5, 2.5];
+      corner = true;
+    } else {
+      const tc = th.covers && th.covers[def.anchor];
+      if (!tc) continue;
+      pos = [tc.icon[0], tc.icon[1] + (portrait ? 2.2 : 4.5)];
+    }
+    badges.push({ kind: "camera", entity, name: def.name, pos, corner });
   }
 
   // większe strefy pod spodem, mniejsze na wierzchu (np. warsztat wewnątrz prostokąta salonu)
@@ -329,7 +373,15 @@ function layerOn(layer, hass) {
   const st = hass && hass.states && hass.states[layer.entity];
   if (!st) return false;
   if (layer.kind === "light") return st.state === "on";
-  return st.state === "on" || st.state === "open" || st.state === "opening";
+  return (layer.openStates || DEFAULT_OPEN).includes(String(st.state).toLowerCase());
+}
+
+// Stan „otwarta” dla bramy/drzwi: open_states: { brama: "open" } (kilka po przecinku). Inne stany = zamknięta.
+const DEFAULT_OPEN = ["on", "open", "opening"];
+function openStatesFor(config, key) {
+  const v = config.open_states && config.open_states[key];
+  if (!v) return DEFAULT_OPEN;
+  return String(v).split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
 }
 
 // Który motyw: wymuszony z config.theme, automatyczny albo null = klasyczny plan (stare obrazki).
@@ -353,7 +405,7 @@ const BADGE_CSS = `
   transition: background 0.6s ease, color 0.6s ease, box-shadow 0.6s ease, border-color 0.6s ease; }
 .fp-light.on { color: #fff7df; border-color: rgba(255, 214, 150, 0.9);
   background: radial-gradient(circle at 50% 40%, #ffd78a 0%, #f6a83c 55%, #c9761e 100%);
-  box-shadow: 0 0 calc(var(--fp-s) * 0.45) calc(var(--fp-s) * 0.12) rgba(255, 176, 72, 0.75), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  box-shadow: 0 0 calc(var(--fp-s) * 0.18) rgba(255, 176, 72, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4); }
 .fp-light.na { opacity: 0.45; }
 .fp-light:hover { transform: translate(-50%, -50%) scale(1.08); }
 .fp-temp { transform: translate(-50%, -50%); display: flex; align-items: center; gap: 2px; white-space: nowrap;
@@ -365,6 +417,42 @@ const BADGE_CSS = `
 .fp-temp ha-icon { color: #9be59b; }
 .fp-temp.cold ha-icon { color: #7fc3ff; }
 .fp-temp.warm ha-icon { color: #ffab5e; }
+.fp-gate { position: absolute; pointer-events: auto; cursor: pointer; user-select: none; -webkit-user-select: none;
+  touch-action: none; -webkit-touch-callout: none; transform: translate(-50%, -50%); overflow: hidden;
+  width: calc(var(--fp-s) * 1.15); height: calc(var(--fp-s) * 1.15); border-radius: calc(var(--fp-s) * 0.28);
+  display: flex; align-items: center; justify-content: center; color: #e6edf5;
+  background: rgba(18, 20, 26, 0.6); border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --mdc-icon-size: calc(var(--fp-s) * 0.7); transition: background 0.4s ease, color 0.4s ease; }
+.fp-gate.open { background: rgba(196, 64, 48, 0.85); border-color: rgba(255, 160, 140, 0.9); color: #fff; }
+.fp-gate.na { opacity: 0.5; }
+.fp-hold { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #ffb347;
+  transform: scaleX(0); transform-origin: left; }
+.fp-confirm { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.45); pointer-events: auto; }
+.fp-confirm-box { min-width: 220px; max-width: 80%; padding: 18px 20px; border-radius: 16px; text-align: center;
+  background: var(--card-background-color, #1c1f26); color: var(--primary-text-color, #fff);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); --mdc-icon-size: 40px;
+  font: 500 16px/1.4 var(--paper-font-body1_-_font-family, system-ui, sans-serif); }
+.fp-confirm-box ha-icon { color: #ffb347; }
+.fp-confirm-q { margin: 8px 0 14px; }
+.fp-confirm-btns { display: flex; gap: 10px; justify-content: center; }
+.fp-confirm-btns button { min-width: 84px; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer;
+  font: 600 15px/1 inherit; }
+.fp-no { background: rgba(127, 127, 127, 0.25); color: inherit; }
+.fp-yes { background: #e0533f; color: #fff; }
+.fp-cam { position: absolute; pointer-events: auto; cursor: pointer; transform: translate(-50%, 0);
+  width: var(--fp-cam-w); aspect-ratio: 16 / 9; border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
+  background: #0b0f15; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
+.fp-cam.fp-corner { transform: none; }
+.fp-cam img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.fp-cam.na img { visibility: hidden; }
+.fp-cam-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 3px;
+  padding: 2px 6px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); color: #fff;
+  font: 600 calc(var(--fp-s) * 0.3) / 1.2 var(--paper-font-body1_-_font-family, system-ui, sans-serif);
+  --mdc-icon-size: calc(var(--fp-s) * 0.34); white-space: nowrap; overflow: hidden; }
+.fp-cam-label ha-icon { color: #ff5d6c; }
+.fp-cam:hover { box-shadow: 0 0 0 2px rgba(255, 200, 120, 0.8), 0 4px 14px rgba(0, 0, 0, 0.55); }
 .fp-temp.fp-below { transform: translate(-50%, calc(var(--fp-s) * 0.62)); }
 `;
 
@@ -402,13 +490,18 @@ class HaFloorPlanCardEditor extends HTMLElement {
       d[`${k}__temperature`] = r.temperature || "";
     }
     for (const k of EDITOR_COVERS) d[`cover__${k}`] = covers[k] || "";
+    for (const k of EDITOR_COVERS) d[`open__${k}`] = (c.open_states && c.open_states[k]) || "";
+    d.gate_action = c.gate_action || "";
+    d.gate_hold_ms = Number(c.gate_hold_ms) || 1000;
+    const cams = { ...DEFAULT_CAMERAS, ...(c.cameras || {}) };
+    for (const k of Object.keys(CAMERAS)) d[`camera__${k}`] = cams[k] || "";
     return d;
   }
 
   _schema() {
     const lightSel = { entity: { domain: ["light", "switch"] } };
     const tempSel = { entity: { domain: "sensor" } };
-    const coverSel = { entity: { domain: ["binary_sensor", "cover"] } };
+    const coverSel = { entity: { domain: ["binary_sensor", "cover", "sensor", "switch", "input_boolean", "lock"] } };
     return [
       {
         type: "grid", name: "", schema: [
@@ -436,7 +529,18 @@ class HaFloorPlanCardEditor extends HTMLElement {
       })),
       {
         type: "expandable", flatten: true, title: "Brama i drzwi", icon: "mdi:garage",
-        schema: EDITOR_COVERS.map((k) => ({ name: `cover__${k}`, selector: coverSel })),
+        schema: [
+          ...EDITOR_COVERS.flatMap((k) => [
+            { name: `cover__${k}`, selector: coverSel },
+            { name: `open__${k}`, selector: { text: {} } },
+          ]),
+          { name: "gate_action", selector: { entity: { domain: ["cover", "button", "input_button", "switch", "script", "input_boolean"] } } },
+          { name: "gate_hold_ms", selector: { number: { min: 300, max: 5000, step: 100, mode: "box", unit_of_measurement: "ms" } } },
+        ],
+      },
+      {
+        type: "expandable", flatten: true, title: "Kamery", icon: "mdi:cctv",
+        schema: Object.keys(CAMERAS).map((k) => ({ name: `camera__${k}`, selector: { entity: { domain: "camera" } } })),
       },
     ];
   }
@@ -451,7 +555,11 @@ class HaFloorPlanCardEditor extends HTMLElement {
     if (labels[n]) return labels[n];
     if (n.endsWith("__light")) return "Światło";
     if (n.endsWith("__temperature")) return "Czujnik temperatury";
-    if (n.startsWith("cover__")) return COVERS[n.slice(7)].name;
+    if (n.startsWith("cover__")) return `${COVERS[n.slice(7)].name} – stan`;
+    if (n.startsWith("open__")) return `${COVERS[n.slice(6)].name}: stan „otwarta” (np. on, open; puste = on/open/opening)`;
+    if (n === "gate_action") return "Otwieranie bramy (encja do wywołania)";
+    if (n === "gate_hold_ms") return "Przytrzymanie bramy przed pytaniem";
+    if (n.startsWith("camera__")) return CAMERAS[n.slice(8)].name;
     return n;
   }
 
@@ -483,6 +591,19 @@ class HaFloorPlanCardEditor extends HTMLElement {
     }
     c.rooms = Object.keys(rooms).length ? rooms : undefined;
     c.covers = Object.keys(covers).length ? covers : undefined;
+    const open = {};
+    for (const k of EDITOR_COVERS) if (d[`open__${k}`]) open[k] = d[`open__${k}`];
+    c.open_states = Object.keys(open).length ? open : undefined;
+    c.gate_action = d.gate_action || undefined;
+    c.gate_hold_ms = d.gate_hold_ms && Number(d.gate_hold_ms) !== 1000 ? Number(d.gate_hold_ms) : undefined;
+    const cameras = {};
+    for (const k of Object.keys(CAMERAS)) {
+      const e = d[`camera__${k}`] || undefined;
+      if (e === DEFAULT_CAMERAS[k]) continue;
+      if (!e) { if (DEFAULT_CAMERAS[k]) cameras[k] = false; continue; }
+      cameras[k] = e;
+    }
+    c.cameras = Object.keys(cameras).length ? cameras : undefined;
     for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
     this._config = c;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: c }, bubbles: true, composed: true }));
@@ -532,11 +653,14 @@ class HaFloorPlanCard extends HTMLElement {
     window.addEventListener("resize", this._onResize);
     // co minutę sprawdza datę (zmiana pory roku o północy)
     if (!this._timer) this._timer = setInterval(() => this._refresh(), 60000);
+    // kamery odświeżają się także, gdy w HA nic się nie zmienia
+    if (!this._camTimer) this._camTimer = setInterval(() => this._updateLayers(), 10000);
   }
 
   disconnectedCallback() {
     if (this._onResize) window.removeEventListener("resize", this._onResize);
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._camTimer) { clearInterval(this._camTimer); this._camTimer = null; }
   }
 
   // Przebudowuje kartę tylko, gdy zmienił się motyw.
@@ -577,6 +701,7 @@ class HaFloorPlanCard extends HTMLElement {
 
     // opakowanie: karta + warstwa nakładek dokładnie nad obrazem
     const wrap = document.createElement("div");
+    wrap.className = "fp-wrap";
     wrap.style.position = "relative";
     wrap.style.display = "block";
     const full = this._config.fullscreen !== false;
@@ -600,11 +725,9 @@ class HaFloorPlanCard extends HTMLElement {
     const layer = document.createElement("div");
     Object.assign(layer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" });
     this._layers = layers.map((l) => {
-      const img = document.createElement("img");
-      img.src = l.src;
-      img.alt = "";
-      img.draggable = false;
-      Object.assign(img.style, {
+      // kontener w miejscu nakładki; całość płynnie się rozjaśnia/gaśnie
+      const box = document.createElement("div");
+      Object.assign(box.style, {
         position: "absolute",
         left: `${l.box[0]}%`,
         top: `${l.box[1]}%`,
@@ -612,17 +735,40 @@ class HaFloorPlanCard extends HTMLElement {
         height: `${l.box[3]}%`,
         opacity: "0",
         transition: "opacity 0.6s ease",
-        filter: l.kind === "light" ? GLOW_FILTER : "",
       });
-      layer.appendChild(img);
-      return { ...l, img };
+      const img = document.createElement("img");
+      img.src = l.src;
+      img.alt = "";
+      img.draggable = false;
+      Object.assign(img.style, { position: "absolute", inset: "0", width: "100%", height: "100%" });
+      box.appendChild(img);
+      if (l.kind === "light") {
+        // ciepła plama światła wokół lampy, przycięta maską do kształtu pokoju (nie wylewa się za ściany)
+        const pool = document.createElement("div");
+        const mask = `url("${l.src}")`;
+        const [cx, cy] = l.center || [50, 50];
+        Object.assign(pool.style, {
+          position: "absolute", inset: "0",
+          background: `radial-gradient(ellipse 70% 80% at ${cx}% ${cy}%, rgba(255,214,140,0.55) 0%, rgba(255,170,80,0.22) 45%, rgba(255,150,60,0) 80%)`,
+          mixBlendMode: "screen",
+          webkitMaskImage: mask, maskImage: mask,
+          webkitMaskSize: "100% 100%", maskSize: "100% 100%",
+          webkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+        });
+        box.appendChild(pool);
+      }
+      layer.appendChild(box);
+      return { ...l, img: box };
     });
     wrap.appendChild(layer);
 
     // ikonki światła i temperatury (własna warstwa, skalowana z szerokością mapy)
     const th2 = key ? THEMES[key] : null;
     wrap.style.containerType = "inline-size";
-    wrap.style.setProperty("--fp-s", th2 && th2.orient === "pion" ? "clamp(24px, 5.6cqw, 44px)" : "clamp(26px, 2.8cqw, 52px)");
+    const pion = th2 && th2.orient === "pion";
+    wrap.style.setProperty("--fp-s", pion ? "clamp(24px, 5.6cqw, 44px)" : "clamp(26px, 2.8cqw, 52px)");
+    const camW = this._config.camera_size || (pion ? 30 : 15); // % szerokości mapy
+    wrap.style.setProperty("--fp-cam-w", `clamp(90px, ${camW}cqw, 420px)`);
     const style = document.createElement("style");
     style.textContent = BADGE_CSS;
     wrap.appendChild(style);
@@ -632,7 +778,18 @@ class HaFloorPlanCard extends HTMLElement {
       const el = document.createElement("div");
       el.style.left = `${b.pos[0]}%`;
       el.style.top = `${b.pos[1]}%`;
-      if (b.kind === "light") {
+      if (b.kind === "gate") {
+        el.className = "fp-gate";
+        el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
+        el.innerHTML = `<ha-icon icon="mdi:garage"></ha-icon><div class="fp-hold"></div>`;
+        this._bindGate(el, b);
+      } else if (b.kind === "camera") {
+        el.className = b.corner ? "fp-cam fp-corner" : "fp-cam";
+        el.title = b.name;
+        el.innerHTML = `<img alt=""><div class="fp-cam-label"><ha-icon icon="mdi:cctv"></ha-icon><span></span></div>`;
+        el.querySelector("span").textContent = b.name.replace(/^Kamera /, "");
+        this._bindPress(el, b.entity, true); // klik = podgląd na żywo (okno encji)
+      } else if (b.kind === "light") {
         el.className = "fp-light";
         el.title = `${b.name} - światło`;
         el.innerHTML = `<ha-icon icon="${b.icon || "mdi:lightbulb-outline"}"></ha-icon>`;
@@ -662,8 +819,32 @@ class HaFloorPlanCard extends HTMLElement {
     }
     if (!this._badges) return;
     const states = (this._hass && this._hass.states) || {};
+    const now = Date.now();
     for (const b of this._badges) {
       const st = b.entity ? states[b.entity] : null;
+      if (b.kind === "gate") {
+        const open = !!st && (b.openStates || DEFAULT_OPEN).includes(String(st.state).toLowerCase());
+        b.el.classList.toggle("open", open);
+        b.el.classList.toggle("na", !!b.entity && (!st || st.state === "unavailable"));
+        const ic = b.el.firstChild;
+        const want = open ? "mdi:garage-open" : "mdi:garage";
+        if (ic.getAttribute("icon") !== want) ic.setAttribute("icon", want);
+        b._open = open;
+        continue;
+      }
+      if (b.kind === "camera") {
+        // obrazek z kamery odświeżany co 10 s (adres z tokenem bierzemy z encji)
+        const pic = st && st.attributes && st.attributes.entity_picture;
+        const img = b.el.firstChild;
+        b.el.classList.toggle("na", !pic || st.state === "unavailable");
+        if (pic && (!b._t || now - b._t > 10000 || b._pic !== pic)) {
+          b._t = now;
+          b._pic = pic;
+          const url = this._hass.hassUrl ? this._hass.hassUrl(pic) : pic;
+          img.src = `${url}${url.includes("?") ? "&" : "?"}_t=${now}`;
+        }
+        continue;
+      }
       if (b.kind === "light") {
         const on = !!st && st.state === "on";
         b.el.classList.toggle("on", on);
@@ -681,6 +862,70 @@ class HaFloorPlanCard extends HTMLElement {
         b.el.classList.toggle("warm", !isNaN(v) && v > 24);
       }
     }
+  }
+
+  // Brama: klik = szczegóły, przytrzymanie (gate_hold_ms, domyślnie 1 s) = okno „Na pewno…?”
+  _bindGate(el, b) {
+    const holdMs = Number(this._config.gate_hold_ms) || 1000;
+    let timer = null;
+    let held = false;
+    const bar = el.querySelector(".fp-hold");
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      bar.style.transition = "none";
+      bar.style.transform = "scaleX(0)";
+    };
+    el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    el.addEventListener("pointerdown", () => {
+      held = false;
+      bar.style.transition = `transform ${holdMs}ms linear`;
+      bar.style.transform = "scaleX(1)";
+      timer = setTimeout(() => { held = true; cancel(); this._confirmGate(b); }, holdMs);
+    });
+    el.addEventListener("pointerup", () => { if (!held) cancel(); });
+    el.addEventListener("pointerleave", cancel);
+    el.addEventListener("pointercancel", cancel);
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (held) return;
+      cancel();
+      const id = b.entity || this._config.gate_action;
+      if (id) this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: id }, bubbles: true, composed: true }));
+    });
+  }
+
+  _confirmGate(b) {
+    const wrap = this.querySelector(".fp-wrap");
+    if (!wrap || wrap.querySelector(".fp-confirm")) return;
+    const target = this._config.gate_action || b.entity;
+    const domain = target ? target.split(".")[0] : "";
+    const canAct = ["cover", "button", "input_button", "switch", "script", "input_boolean"].includes(domain);
+    const closing = domain === "cover" && b._open;
+    const dlg = document.createElement("div");
+    dlg.className = "fp-confirm";
+    dlg.innerHTML = `<div class="fp-confirm-box">
+      <ha-icon icon="${closing ? "mdi:garage" : "mdi:garage-open"}"></ha-icon>
+      <div class="fp-confirm-q"></div>
+      <div class="fp-confirm-btns"><button class="fp-no">Nie</button><button class="fp-yes">Tak</button></div></div>`;
+    dlg.querySelector(".fp-confirm-q").textContent = canAct
+      ? (closing ? "Na pewno zamknąć bramę?" : "Na pewno otworzyć bramę?")
+      : "Nie wybrano encji otwierającej bramę. Ustaw „Otwieranie bramy” w edytorze karty.";
+    const yes = dlg.querySelector(".fp-yes");
+    if (!canAct) yes.remove();
+    const close = () => dlg.remove();
+    dlg.addEventListener("click", (ev) => { ev.stopPropagation(); if (ev.target === dlg) close(); });
+    dlg.querySelector(".fp-no").addEventListener("click", close);
+    yes.addEventListener("click", () => {
+      close();
+      if (!this._hass) return;
+      const data = { entity_id: target };
+      if (domain === "cover") this._hass.callService("cover", closing ? "close_cover" : "open_cover", data);
+      else if (domain === "button" || domain === "input_button") this._hass.callService(domain, "press", data);
+      else if (domain === "switch" || domain === "script") this._hass.callService(domain, "turn_on", data);
+      else if (domain === "input_boolean") this._hass.callService("input_boolean", "toggle", data);
+    });
+    wrap.appendChild(dlg);
   }
 
   // klik = przełącz (światło), przytrzymanie / klik w temperaturę = szczegóły encji
