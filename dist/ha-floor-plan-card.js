@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.9";
+const CARD_VERSION = "1.5.10";
 
 // Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
@@ -268,7 +268,9 @@ function buildThemed(config, key) {
   const base = (config.base_path || SCRIPT_BASE).replace(/\/$/, "");
   const dir = `${base}/themes/${key}`;
   const rooms = { ...DEFAULT_ROOMS, ...(config.rooms || {}) };
-  const covers = { ...DEFAULT_COVERS, ...(config.covers || {}) };
+  const covers = { ...DEFAULT_COVERS, ...(config.covers && typeof config.covers === "object" ? config.covers : {}) };
+  // tylko tekstowe entity_id (false / puste / coś dziwnego z YAML = brak encji, zamiast wywalenia całej karty)
+  for (const k of Object.keys(covers)) covers[k] = typeof covers[k] === "string" && covers[k].trim() ? covers[k].trim() : null;
   const portrait = th.orient === "pion";
   const iconSize = portrait ? "22px" : "28px";
   const taps = [];
@@ -566,6 +568,9 @@ const BADGE_CSS = `
 .fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
 .fp-sg.fp-gd, .fp-sg.fp-dd { display: block; }
+.fp-corner-note { display: inline-block; float: right; padding: 8px 12px; border-radius: 10px; max-width: 100%;
+  background: rgba(18, 20, 26, 0.75); color: rgba(255, 255, 255, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);
+  font: 500 13px/1.35 var(--paper-font-body1_-_font-family, system-ui, sans-serif); box-sizing: border-box; }
 .fp-dd svg { width: 100%; height: 100%; filter: none; overflow: visible; }
 .fp-dd-leaf { transform-box: view-box; transform-origin: 70px 50px; transition: transform 0.9s cubic-bezier(0.45, 0, 0.25, 1); }
 .fp-dd.open .fp-dd-leaf { transform: scaleX(-0.45) skewY(-14deg); }
@@ -1089,8 +1094,8 @@ class HaFloorPlanCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config) throw new Error("Brak konfiguracji");
-    this._config = config;
+    // nigdy nie rzucamy błędem z konfiguracji: złe pola są pomijane, a stara konfiguracja dalej działa
+    this._config = config && typeof config === "object" ? config : {};
     this._card = null;
     this._themeKey = undefined;
     this._refresh();
@@ -1285,11 +1290,44 @@ class HaFloorPlanCard extends HTMLElement {
     if (this._cornerRO) { this._cornerRO.disconnect(); this._cornerRO = null; }
     this._corner = null;
     const cc = this._config.corner_card === undefined ? DEFAULT_CORNER_CARD : this._config.corner_card;
-    if (!cc || typeof cc !== "object" || !cc.type) return;
-    let inner;
-    try { inner = helpers.createCardElement(cc); } catch (e) { console.error("ha-floor-plan-card corner_card:", e); return; }
-    if (this._hass) inner.hass = this._hass;
-    this._corner = inner;
+    if (!cc || typeof cc !== "object" || !cc.type) return null;
+    // Holder, do którego wkładamy kartę. Karta „custom:” może się załadować później niż mapa – wtedy HA daje
+    // tymczasową kartę błędu i prosi o przebudowę (ll-rebuild). Czekamy na nią i budujemy kartę na nowo,
+    // zamiast zostawiać czerwone „Błąd konfiguracji”.
+    const holder = document.createElement("div");
+    const tag = String(cc.type).startsWith("custom:") ? String(cc.type).slice(7) : null;
+    const note = (txt) => {
+      holder.innerHTML = "";
+      const n = document.createElement("div");
+      n.className = "fp-corner-note";
+      n.textContent = txt;
+      holder.appendChild(n);
+      this._corner = null;
+    };
+    const mount = () => {
+      let inner;
+      try { inner = helpers.createCardElement(cc); } catch (e) {
+        console.error("ha-floor-plan-card corner_card:", e);
+        note(`Karta w rogu: błąd (${(e && e.message) || e})`);
+        return;
+      }
+      inner.addEventListener("ll-rebuild", (ev) => { ev.stopPropagation(); mount(); });
+      if (this._hass) inner.hass = this._hass;
+      holder.innerHTML = "";
+      holder.appendChild(inner);
+      this._corner = inner;
+    };
+    if (tag && !customElements.get(tag)) {
+      note(`Ładowanie karty ${cc.type}…`);
+      let done = false;
+      customElements.whenDefined(tag).then(() => { done = true; mount(); });
+      setTimeout(() => {
+        if (!done) note(`Karta w rogu: nie ma karty ${cc.type}. Sprawdź, czy jest zainstalowana (HACS / zasoby), albo wyłącz ją w edytorze mapy.`);
+      }, 15000);
+    } else {
+      mount();
+    }
+    const inner = holder;
     if (corner) {
       const box = document.createElement("div");
       box.className = "fp-corner";
@@ -1311,7 +1349,9 @@ class HaFloorPlanCard extends HTMLElement {
         const w = sc.offsetWidth || natW;
         const h = sc.offsetHeight || 1;
         if (!bw || !bh) return;
-        const k = Math.min(2.5, bw / w, bh / h);
+        // komunikat (ładowanie / brak karty) w normalnym rozmiarze, nie rozdmuchany na pół mapy
+        const isNote = !!holder.querySelector(".fp-corner-note") || !!holder.querySelector("hui-error-card");
+        const k = Math.min(isNote ? 1 : 2.5, bw / w, bh / h);
         sc.style.transform = `scale(${k.toFixed(4)})`;
       };
       if (window.ResizeObserver) {
@@ -1355,8 +1395,9 @@ class HaFloorPlanCard extends HTMLElement {
         b.el.classList.toggle("na", !b.entity || !st || sv === "unavailable");
         const L = b.label || "Brama";
         const fem = L.startsWith("Brama") || L === "Furtka";
-        const txt = !b.entity ? `${L} – brak encji` : !st ? `${L} – nie ma takiej encji` : sv === "unavailable" ? `${L} – brak danych`
-          : moving ? `${L} w ruchu` : open ? `${L} ${fem ? "otwarta" : "otwarte"}` : `${L} ${fem ? "zamknięta" : "zamknięte"}`;
+        // krótko: kółko + sam stan (nazwa bramy w podpowiedzi po najechaniu)
+        const txt = !b.entity ? "brak encji" : !st ? "nie ma encji" : sv === "unavailable" ? "brak danych"
+          : moving ? "w ruchu" : open ? (fem ? "otwarta" : "otwarte") : (fem ? "zamknięta" : "zamknięte");
         const span = b.el.querySelector(".fp-sg-label span");
         if (span && span.textContent !== txt) span.textContent = txt;
         b._open = realOpen;
