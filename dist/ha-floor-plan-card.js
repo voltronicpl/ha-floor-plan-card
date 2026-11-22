@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.1";
+const CARD_VERSION = "1.6.2";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -480,7 +480,9 @@ function buildThemed(config, key) {
     // miejsce na kartę w prawym górnym rogu nad domem (w pionie: null = pod mapą)
     // od prawego górnego narożnika mapy aż do dachu; z lewej do kamery „tył”
     corner: portrait ? null : {
-      left: camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 1.5 : 30, top: 0.6, right: 99.6, bottom: Math.max(6, houseTop - 0.3) },
+      // corner_card_grow: o ile % wysokości mapy karta może zejść na dach (domyślnie 4 = trochę większa)
+      left: camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 1.5 : 30, top: 0.6, right: 99.6,
+      bottom: Math.max(6, houseTop - 0.3 + (isFinite(Number(config.corner_card_grow)) && config.corner_card_grow !== undefined ? Number(config.corner_card_grow) : 4)) },
   };
 }
 
@@ -1635,12 +1637,18 @@ class HaFloorPlanCard extends HTMLElement {
       this._corner = inner;
     };
     if (tag && !customElements.get(tag)) {
-      note(`Ładowanie karty ${cc.type}…`);
+      // czekamy bez limitu: karta (np. EMS z integracji) potrafi się zarejestrować dużo później, zwłaszcza w aplikacji
+      // na telefonie. Do tego czasu róg jest pusty – bez straszenia komunikatem.
+      holder.innerHTML = "";
+      this._corner = null;
       let done = false;
-      customElements.whenDefined(tag).then(() => { done = true; mount(); });
+      const go = () => { if (!done && customElements.get(tag)) { done = true; mount(); } };
+      customElements.whenDefined(tag).then(go);
+      const iv = setInterval(() => { go(); if (done || !holder.isConnected) clearInterval(iv); }, 1000);
+      // dopiero po 2 minutach, gdy dalej nic: mała podpowiedź
       setTimeout(() => {
-        if (!done) note(`Karta w rogu: nie ma karty ${cc.type}. Sprawdź, czy jest zainstalowana (HACS / zasoby), albo wyłącz ją w edytorze mapy.`);
-      }, 15000);
+        if (!done && holder.isConnected) note(`Brak karty ${cc.type} – czy jest zainstalowana?`);
+      }, 120000);
     } else {
       mount();
     }
