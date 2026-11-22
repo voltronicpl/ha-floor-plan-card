@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.2";
+const CARD_VERSION = "1.6.3";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -482,7 +482,7 @@ function buildThemed(config, key) {
     corner: portrait ? null : {
       // corner_card_grow: o ile % wysokości mapy karta może zejść na dach (domyślnie 4 = trochę większa)
       left: camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 1.5 : 30, top: 0.6, right: 99.6,
-      bottom: Math.max(6, houseTop - 0.3 + (isFinite(Number(config.corner_card_grow)) && config.corner_card_grow !== undefined ? Number(config.corner_card_grow) : 4)) },
+      bottom: Math.max(6, houseTop - 0.3 + (isFinite(Number(config.corner_card_grow)) && config.corner_card_grow !== undefined ? Number(config.corner_card_grow) : 1)) },
   };
 }
 
@@ -1662,7 +1662,7 @@ class HaFloorPlanCard extends HTMLElement {
         pointerEvents: "none", zIndex: "3",
       });
       const sc = document.createElement("div");
-      const natW = Number(this._config.corner_card_width) || 520; // szerokość karty przed skalowaniem (px)
+      const natW = Number(this._config.corner_card_width) || 680; // szerzej = EMS ma miejsce na teksty (nie ucina „Sieć”, „PV”) // szerokość karty przed skalowaniem (px)
       Object.assign(sc.style, { position: "absolute", top: "0", right: "0", width: `${natW}px`,
         transformOrigin: "top right", pointerEvents: "auto" });
       sc.appendChild(inner);
