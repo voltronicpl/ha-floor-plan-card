@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.5";
+const CARD_VERSION = "1.6.6";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -534,7 +534,10 @@ function buildThemed(config, key) {
     }),
     // miejsce na kartę w prawym górnym rogu nad domem (w pionie: null = pod mapą)
     // od prawego górnego narożnika mapy aż do dachu; z lewej do kamery „tył”
-    corner: portrait ? null : {
+    // w pionie: mała, w prawym górnym rogu nad domem (obok kamery „tył”)
+    corner: portrait ? (config.corner_card_below === true ? null : {
+      left: Math.max(camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 2 : 50, 52), top: 0.8, right: 99.2,
+      bottom: Math.max(6, Math.min(houseTop - 1, 22)) }) : {
       // corner_card_grow: o ile % wysokości mapy karta może zejść na dach (domyślnie 4 = trochę większa)
       left: camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 1.5 : 30, top: 0.6, right: 99.6,
       bottom: Math.max(6, houseTop - 0.3 + (isFinite(Number(config.corner_card_grow)) && config.corner_card_grow !== undefined ? Number(config.corner_card_grow) : 1)) },

@@ -247,6 +247,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `fence_y` | Linia ziemi płotu w % wysokości obrazka (domyślnie 99,3). |
 | `fence_gap` | `false` = nie zamalowuj płotu z tła pod bramą i furtką (domyślnie zamalowany śniegiem/trawą). |
 | `corner_card_grow` | O ile % wysokości mapy karta w rogu może zejść na dach (domyślnie 4). Większa liczba = większa karta. |
+| `corner_card_below` | `true` = w pionie (telefon) karta pod mapą zamiast małej w prawym górnym rogu. |
 | `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |
 | `garage_action` | Brama garażowa: encja wywoływana po potwierdzeniu. |
 | `gate_hold_ms` | Jak długo przytrzymać bramę (ms, domyślnie 1000). |
