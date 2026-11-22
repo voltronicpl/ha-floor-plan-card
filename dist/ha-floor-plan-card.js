@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.6.1";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -1144,6 +1144,7 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
   <button type="button" class="fp-a-undo">Cofnij</button>
   <button type="button" class="fp-a-rect">Zacznij od prostokąta</button>
   <button type="button" class="fp-a-clear">Usuń obszar pokoju</button>
+  <button type="button" class="fp-a-copy">Przenieś na inne układy</button>
 </div>
 <div class="fp-area-info"></div>`;
       const st = document.createElement("style");
@@ -1211,6 +1212,35 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
         const o = this._aOrient.value;
         if (areas[o]) delete areas[o][this._aRoom.value];
         this._saveAreas(areas);
+      });
+      // przelicza wszystkie narysowane obszary z tego układu na pozostałe (telefon, szeroki…) według obrysu domu
+      q(".fp-a-copy").addEventListener("click", () => {
+        const from = this._aOrient.value;
+        const areas = this._areas();
+        const src = areas[from] || {};
+        const rooms = Object.keys(src).filter((r) => src[r] && src[r].length >= 3);
+        if (!rooms.length) { this._aInfo.textContent = "Najpierw narysuj obszary w tym układzie."; return; }
+        const bbox = (key) => {
+          const bs = Object.values(THEMES[key].rooms || {}).map((x) => x.light && x.light.box).filter(Boolean);
+          const l = Math.min(...bs.map((b) => b[0])), t = Math.min(...bs.map((b) => b[1]));
+          return [l, t, Math.max(...bs.map((b) => b[0] + b[2])) - l, Math.max(...bs.map((b) => b[1] + b[3])) - t];
+        };
+        const fk = this._areaThemeKey(from);
+        const A = bbox(fk);
+        const targets = [...new Set(Object.values(THEMES).map((t) => t.orient))].filter((o) => o !== from);
+        const clash = targets.filter((o) => areas[o] && rooms.some((r) => areas[o][r] && areas[o][r].length));
+        if (clash.length && !window.confirm(`W układzie ${clash.join(", ")} są już narysowane te pokoje. Nadpisać je?`)) return;
+        for (const o of targets) {
+          const tk = this._areaThemeKey(o);
+          if (!tk) continue;
+          const B = bbox(tk);
+          areas[o] = areas[o] || {};
+          for (const r of rooms) {
+            areas[o][r] = src[r].map(([x, y]) => [B[0] + ((x - A[0]) / A[2]) * B[2], B[1] + ((y - A[1]) / A[3]) * B[3]]);
+          }
+        }
+        this._saveAreas(areas);
+        this._aInfo.textContent = `Przeniesiono ${rooms.length} obszar(y) z układu „${from}” na: ${targets.join(", ")}. Sprawdź je i popraw punkty, jeśli trzeba.`;
       });
       q(".fp-a-rect").addEventListener("click", () => {
         const o = this._aOrient.value;
