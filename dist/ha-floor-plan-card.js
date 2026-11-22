@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.7";
+const CARD_VERSION = "1.6.8";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -482,7 +482,7 @@ function buildThemed(config, key) {
       [gl, gt] = fenceGate.rect;
       gateRect = fenceGate.rect;
       badges.push({ kind: "slidegate", svg: "gate", label: "Brama", acc: "bramę", actionKey: "gate_action", up: true,
-        leaf: fenceGate.L, entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [fenceGate.rect[2]],
+        leaf: fenceGate.L, entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [fenceGate.rect[2]], ground: [fenceY, 92 / 106],
         openStates: openStatesFor(config, "brama_wjazdowa") });
     } else {
     if (cr && portrait) { gl = cr[0]; gt = cr[1] + cr[3] + 1; }
@@ -497,7 +497,7 @@ function buildThemed(config, key) {
   // furtka: obok kamery „wejście” (poziom) albo pod nią (pion)
   if (config.wicket !== false && fenceWicket) {
     badges.push({ kind: "slidegate", svg: "wicket", label: "Furtka", acc: "furtkę", actionKey: "wicket_action", up: true,
-      entity: covers.furtka || null, name: "Furtka", pos: [fenceWicket[0], fenceWicket[1]], size: [fenceWicket[2]],
+      entity: covers.furtka || null, name: "Furtka", pos: [fenceWicket[0], fenceWicket[1]], size: [fenceWicket[2]], ground: [fenceY, 84 / 96],
       openStates: openStatesFor(config, "furtka") });
   } else if (config.wicket !== false) {
     const wEntity = covers.furtka || null;
@@ -1532,8 +1532,27 @@ class HaFloorPlanCard extends HTMLElement {
       Object.assign(blur.style, { position: "absolute", inset: "-80px", background: `center / cover no-repeat url("${cfg.image}")`,
         filter: "blur(40px) brightness(0.6) saturate(0.8)", pointerEvents: "none" });
       stage.appendChild(blur);
-      Object.assign(wrap.style, { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
-        width: `min(max(100%, ${H} * ${aspect}), ${zoom} * min(100%, ${H} * ${aspect}))`, margin: "0" });
+      if (this._config.fullscreen_fit === "contain") {
+        Object.assign(wrap.style, { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+          width: `min(max(100%, ${H} * ${aspect}), ${zoom} * min(100%, ${H} * ${aspect}))`, margin: "0" });
+      } else {
+        // domyślnie (fullscreen_fit: stretch): mapa na całą szerokość i wysokość ekranu. Rozciągany jest tylko obraz
+        // (w pionie, o ile trzeba), a ikonki, bramy, kamery i EMS stoją w tych samych miejscach i się nie zniekształcają.
+        Object.assign(wrap.style, { position: "absolute", inset: "0", margin: "0" });
+        card.style.transformOrigin = "0 0";
+        const a = Number(aspect);
+        const stretch = () => {
+          const w = stage.clientWidth;
+          const h = stage.clientHeight;
+          if (w && h) card.style.transform = `scaleY(${(h / (w / a)).toFixed(4)})`;
+        };
+        if (window.ResizeObserver) {
+          this._stageRO && this._stageRO.disconnect();
+          this._stageRO = new ResizeObserver(stretch);
+          this._stageRO.observe(stage);
+        }
+        setTimeout(stretch, 0);
+      }
     }
     card.style.display = "block";
     card.style.width = "100%";
@@ -1646,6 +1665,8 @@ class HaFloorPlanCard extends HTMLElement {
         el.style.width = `${b.size[0]}%`;
         if (b.size[1]) el.style.height = `${b.size[1]}%`;
         if (b.alignLeft) el.classList.add("fp-gd-left");
+        // brama/furtka w płocie: przypięta dołem do linii ziemi (zgadza się też przy rozciągniętym obrazie)
+        if (b.ground) { el.style.top = `${b.ground[0]}%`; el.style.transform = `translateY(-${(b.ground[1] * 100).toFixed(2)}%)`; }
         if (b.up) el.classList.add("fp-up"); // napis nad bramą/furtką (stoją w płocie przy dolnej krawędzi)
         if (b.leaf) el.style.setProperty("--fp-slide", `${-(b.leaf - 2)}px`);
         // napis nad środkiem wjazdu (nie nad pustym miejscem na odsunięte skrzydło)
