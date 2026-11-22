@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.3";
+const CARD_VERSION = "1.5.4";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -313,7 +313,7 @@ function buildThemed(config, key) {
     const tc = th.covers && th.covers[ck];
     if (!tc) continue;
     if (!entity) {
-      if (ck === "brama" && config.gate_action) badges.push({ kind: "gate", entity: null, name: def.name, pos: tc.icon, openStates: [] });
+      if (ck === "brama" && config.garage_action) badges.push({ kind: "gate", entity: null, name: def.name, pos: tc.icon, openStates: [], acc: "bramę garażową", actionKey: "garage_action" });
       continue;
     }
     const isSensor = !entity.startsWith("cover.");
@@ -321,7 +321,7 @@ function buildThemed(config, key) {
     if (tc.open) layers.push({ kind: "cover", entity, src: `${dir}/${tc.open.file}${ASSET_Q}`, box: tc.open.box, openStates });
     if (ck === "brama") {
       // brama: własny przycisk (klik = szczegóły, przytrzymanie = potwierdzenie i otwarcie)
-      badges.push({ kind: "gate", entity, name: def.name, pos: tc.icon, openStates });
+      badges.push({ kind: "gate", entity, name: def.name, pos: tc.icon, openStates, acc: "bramę garażową", actionKey: "garage_action" });
       continue;
     }
     controls.push({
@@ -384,7 +384,8 @@ function buildThemed(config, key) {
 
   // brama suwana przy kamerze „przód”: obok niej (poziom) albo pod nią (pion)
   // pokazywana zawsze; bez wybranej encji jest szara z napisem „brak encji”
-  const gateEntity = covers.brama || null;
+  // brama wjazdowa (suwana) ma własną encję, osobną od bramy garażowej na planie
+  const gateEntity = covers.brama_wjazdowa || null;
   let gateRect = null;
   if (config.slide_gate !== false) {
     const cr = camRects.przod;
@@ -396,7 +397,7 @@ function buildThemed(config, key) {
     else { gl = 1; gt = houseBottom + 1.5; }
     gateRect = [gl, gt, gw];
     badges.push({ kind: "slidegate", svg: "gate", label: "Brama", acc: "bramę", actionKey: "gate_action",
-      entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw], openStates: openStatesFor(config, "brama") });
+      entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw], openStates: openStatesFor(config, "brama_wjazdowa") });
   }
 
   // furtka: obok kamery „wejście” (poziom) albo pod nią (pion)
@@ -737,6 +738,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
   _emit(c) {
     for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
     this._config = c;
+    // pola już pokazują nową wartość – nie przebudowuj ich (nie gubi fokusu i wpisanego tekstu)
+    if (this._extra) this._extraCfgKey = JSON.stringify(c);
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: c }, bubbles: true, composed: true }));
   }
 
@@ -747,13 +750,18 @@ class HaFloorPlanCardEditor extends HTMLElement {
     const cams = { ...DEFAULT_CAMERAS, ...(c.cameras || {}) };
     const os = c.open_states || {};
     return [
-      { group: "Brama garażowa", icon: "mdi:garage", fields: [
-        { id: "cover.brama", label: "Stan bramy (dowolna encja: binary_sensor, cover, sensor, switch…)", value: covers.brama || "", entity: true },
+      { group: "Brama garażowa (na planie, w garażu)", icon: "mdi:garage", fields: [
+        { id: "cover.brama", label: "Stan bramy garażowej (dowolna encja: binary_sensor, cover, sensor, switch…)", value: covers.brama || "", entity: true },
         { id: "open.brama", label: "Który stan oznacza „otwarta” (np. on, open; kilka po przecinku; puste = on/open/opening)", value: os.brama || "" },
-        { id: "gate_action", label: "Otwieranie bramy – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.gate_action || "", entity: true },
-        { id: "gate_hold_ms", label: "Przytrzymanie przycisku bramy przed pytaniem (ms)", value: String(Number(c.gate_hold_ms) || 1000), number: true },
+        { id: "garage_action", label: "Otwieranie bramy garażowej – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.garage_action || "", entity: true },
       ] },
-      { group: "Furtka", icon: "mdi:gate", fields: [
+      { group: "Brama wjazdowa (suwana, przy kamerze przód)", icon: "mdi:gate", fields: [
+        { id: "cover.brama_wjazdowa", label: "Stan bramy wjazdowej (dowolna encja)", value: covers.brama_wjazdowa || "", entity: true },
+        { id: "open.brama_wjazdowa", label: "Który stan oznacza „otwarta” (puste = on/open/opening)", value: os.brama_wjazdowa || "" },
+        { id: "gate_action", label: "Otwieranie bramy wjazdowej – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.gate_action || "", entity: true },
+        { id: "gate_hold_ms", label: "Przytrzymanie przycisku bramy/furtki przed pytaniem (ms)", value: String(Number(c.gate_hold_ms) || 1000), number: true },
+      ] },
+      { group: "Furtka", icon: "mdi:gate-open", fields: [
         { id: "cover.furtka", label: "Stan furtki (dowolna encja)", value: covers.furtka || "", entity: true },
         { id: "open.furtka", label: "Który stan oznacza „otwarta” (puste = on/open/opening)", value: os.furtka || "" },
         { id: "wicket_action", label: "Otwieranie furtki – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.wicket_action || "", entity: true },
@@ -788,6 +796,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       if (v) m[key] = v; else delete m[key];
       c.open_states = Object.keys(m).length ? m : undefined;
     } else if (id === "gate_action") c.gate_action = v || undefined;
+    else if (id === "garage_action") c.garage_action = v || undefined;
     else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
     this._emit(c);
@@ -807,6 +816,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
 .fp-ed input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; font-size: 14px;
   border: 1px solid var(--divider-color, #555); background: var(--card-background-color, #1c1f26); color: var(--primary-text-color, #fff); }
 .fp-ed input:focus { outline: 2px solid var(--primary-color, #03a9f4); border-color: transparent; }
+.fp-ed .fp-picker { display: block; margin-bottom: 6px; }
 .fp-ed .fp-ver { font-size: 12px; color: var(--secondary-text-color, #aaa); margin-bottom: 6px; }
 .fp-ed .fp-state { font-size: 12px; color: var(--secondary-text-color, #aaa); margin-top: 4px; }`;
       this._extra.appendChild(st);
@@ -837,6 +847,11 @@ class HaFloorPlanCardEditor extends HTMLElement {
       return;
     }
     this._extraCfgKey = cfgKey;
+    if (!customElements.get("ha-entity-picker") && !this._waitPicker) {
+      // picker HA ładuje się leniwie – gdy się pojawi, przebuduj pola (pole ręczne działa od razu)
+      this._waitPicker = true;
+      customElements.whenDefined("ha-entity-picker").then(() => { this._extraCfgKey = null; this._renderExtra(); });
+    }
     this._extraBody.innerHTML = `<div class="fp-ver">Mapa domu v${CARD_VERSION}</div>`;
     for (const g of this._extraFields()) {
       const det = document.createElement("details");
@@ -846,14 +861,50 @@ class HaFloorPlanCardEditor extends HTMLElement {
       for (const f of g.fields) {
         const lab = document.createElement("label");
         lab.textContent = f.label;
+        det.appendChild(lab);
         const inp = document.createElement("input");
         inp.value = f.value;
         inp.dataset.id = f.id;
-        if (f.entity) { inp.setAttribute("list", this._listId); inp.placeholder = "zacznij pisać, np. brama, sensor., switch."; }
+        let picker = null;
+        if (f.entity && customElements.get("ha-entity-picker")) {
+          // natywny wybór encji z HA (działa też w aplikacji na telefonie)
+          picker = document.createElement("ha-entity-picker");
+          picker.className = "fp-picker";
+          picker.hass = this._hass;
+          picker.value = f.value;
+          picker.allowCustomEntity = true;
+          picker.label = "Wybierz z listy";
+          picker.dataset.id = f.id;
+          picker.addEventListener("value-changed", (ev) => {
+            ev.stopPropagation();
+            const v = (ev.detail && ev.detail.value) || "";
+            inp.value = v;
+            this._extraChanged(f.id, v);
+            this._updateStates();
+          });
+          det.appendChild(picker);
+        }
+        if (f.entity) {
+          inp.setAttribute("list", this._listId);
+          inp.placeholder = "albo wpisz ręcznie entity_id, np. binary_sensor.brama";
+          inp.className = "fp-manual";
+        }
         if (f.number) { inp.type = "number"; inp.min = "300"; inp.max = "5000"; inp.step = "100"; }
         inp.autocomplete = "off";
-        inp.addEventListener("change", () => this._extraChanged(f.id, inp.value));
-        det.appendChild(lab);
+        inp.autocapitalize = "off";
+        inp.spellcheck = false;
+        // zapis po zmianie i chwilę po wpisaniu (na telefonie „change” potrafi nie przyjść przed „Zapisz”)
+        let deb = null;
+        const commit = () => {
+          if (deb) clearTimeout(deb);
+          deb = null;
+          if (picker && picker.value !== inp.value.trim()) picker.value = inp.value.trim();
+          this._extraChanged(f.id, inp.value);
+          this._updateStates();
+        };
+        inp.addEventListener("change", commit);
+        inp.addEventListener("input", () => { if (deb) clearTimeout(deb); deb = setTimeout(commit, 700); this._updateStates(); });
+        inp.addEventListener("keydown", (ev) => { ev.stopPropagation(); if (ev.key === "Enter") commit(); });
         det.appendChild(inp);
         if (f.entity) {
           const stl = document.createElement("div");
@@ -870,6 +921,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
   // pod polem encji pokazuje jej aktualny stan – od razu widać, co wpisać jako „otwarta”
   _updateStates() {
     const states = (this._hass && this._hass.states) || {};
+    for (const p of this._extraBody.querySelectorAll("ha-entity-picker")) p.hass = this._hass;
     for (const el of this._extraBody.querySelectorAll(".fp-state")) {
       const inp = this._extraBody.querySelector(`input[data-id="${el.dataset.for}"]`);
       const id = inp && inp.value.trim();
@@ -879,6 +931,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
   }
 
   async _render() {
+    // pola bramy/drzwi/kamer od razu, nawet gdy ha-form jeszcze się nie załadował
+    this._renderExtra();
     if (!this._form) {
       // ha-form ładuje się leniwie; wymuszamy załadowanie przez edytor wbudowanej karty
       if (!customElements.get("ha-form")) {
@@ -892,7 +946,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) => this._label(s);
       this._form.addEventListener("value-changed", (ev) => this._changed(ev));
-      this.appendChild(this._form);
+      this.insertBefore(this._form, this._extra || null);
     }
     this._form.hass = this._hass;
     this._form.schema = this._schema();
@@ -1204,7 +1258,7 @@ class HaFloorPlanCard extends HTMLElement {
       <div class="fp-confirm-btns"><button class="fp-no">Nie</button><button class="fp-yes">Tak</button></div></div>`;
     dlg.querySelector(".fp-confirm-q").textContent = canAct
       ? (closing ? `Na pewno zamknąć ${acc}?` : `Na pewno otworzyć ${acc}?`)
-      : `Nie wybrano encji otwierającej ${acc === "bramę" ? "bramę" : "furtkę"}. Ustaw ją w edytorze karty.`;
+      : `Nie wybrano encji otwierającej ${acc}. Ustaw ją w edytorze karty.`;
     const yes = dlg.querySelector(".fp-yes");
     if (!canAct) yes.remove();
     const close = () => dlg.remove();

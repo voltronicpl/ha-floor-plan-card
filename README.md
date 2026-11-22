@@ -117,6 +117,13 @@ Przytrzymanie pyta „Na pewno otworzyć furtkę?”. Ukryjesz ją opcją `wicke
 
 ## Brama: stan i otwieranie
 
+Od 1.5.4 są **dwie osobne bramy**, każda z własną encją stanu i otwierania:
+
+- **Brama garażowa** (na planie, w garażu): `covers.brama`, `open_states.brama`, `garage_action`.
+- **Brama wjazdowa** (suwana, przy kamerze „przód”): `covers.brama_wjazdowa`, `open_states.brama_wjazdowa`, `gate_action`.
+
+W edytorze każde pole encji ma natywny wybór z listy HA oraz pole do ręcznego wpisania `entity_id` (zapis po Enter, wyjściu z pola albo chwilę po wpisaniu).
+
 - **Stan bramy:** w edytorze wybierz dowolną encję (`binary_sensor`, `cover`, `sensor`, `switch`…)
   i wpisz, jaki stan oznacza „otwarta” (np. `open` albo `on`, kilka po przecinku). Każdy inny stan to zamknięta.
   Otwarta brama jest na planie fizycznie otwarta, a jej przycisk robi się czerwony. To samo pole jest dla drzwi.
@@ -127,9 +134,12 @@ Przytrzymanie pyta „Na pewno otworzyć furtkę?”. Ukryjesz ją opcją `wicke
 
 ```yaml
 covers:
-  brama: cover.brama_garazowa
+  brama: cover.brama_garazowa          # garażowa
+  brama_wjazdowa: binary_sensor.brama  # suwana wjazdowa
 open_states:
   brama: open
+  brama_wjazdowa: "on"
+garage_action: cover.brama_garazowa
 gate_action: switch.sterownik_bram_l1
 gate_hold_ms: 1000
 ```
@@ -224,7 +234,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `cameras` | `{ przod, wejscie, tyl }`: encje `camera.*`, `false` chowa. |
 | `camera_size` | Szerokość podglądu kamery w % mapy. |
 | `open_states` | `{ brama: "open", drzwi1: "on" }`: stan oznaczający „otwarte”. |
-| `gate_action` | Encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
+| `gate_action` | Brama wjazdowa (suwana): encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
+| `garage_action` | Brama garażowa: encja wywoływana po potwierdzeniu. |
 | `gate_hold_ms` | Jak długo przytrzymać bramę (ms, domyślnie 1000). |
 | `light_icons` | `true` (domyślnie): ikonki światła. `false`: sama poświata. |
 | `show_empty_temp` | `true`: pokazuje `–` w pokojach bez czujnika temperatury. |
@@ -235,7 +246,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `rooms.<pokój>.temperature` | Sensor temperatury pod ikoną. |
 | `rooms.<pokój>.left` / `top` | Przesunięcie ikony w % (opcjonalnie). |
 | `rooms.<pokój>.icon` | Inna ikona (domyślnie `mdi:lightbulb`). |
-| `covers.brama` / `drzwi1` / `drzwi2` | Encje `cover.*` bramy i drzwi. |
+| `covers.brama` / `brama_wjazdowa` / `drzwi1` / `drzwi2` | Encje stanu: brama garażowa, brama wjazdowa (suwana), drzwi. |
 | `extra_elements` | Dodatkowe elementy picture-elements. |
 
 Pokoje: `garaz`, `warsztat`, `salon`, `biuro`, `sypialnia`, `silownia`,
