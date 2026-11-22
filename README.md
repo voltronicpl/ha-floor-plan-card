@@ -241,6 +241,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `camera_size` | Szerokość podglądu kamery w % mapy. |
 | `open_states` | `{ brama: "open", drzwi1: "on" }`: stan oznaczający „otwarte”. |
 | `gate_action` | Brama wjazdowa (suwana): encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
+| `room_areas` | Obszary świateł narysowane w edytorze (sekcja „Obszary świateł (rysowanie)”): `{ poziom: { salon: [[x%, y%], …] }, pion: {…}, szeroki: {…} }`. Pokój z obszarem świeci w swoim kształcie, klik w niego przełącza światło. |
 | `corner_card` | (Gdy karta jeszcze się ładuje, w rogu widać „Ładowanie karty…”; gdy jej nie ma – krótki komunikat zamiast błędu.) Dowolna karta HA w prawym górnym rogu nad domem, domyślnie `{ type: custom:ems-card, device: ecobss }`. Skaluje się, żeby zmieścić się nad dachem; na telefonie (pion) jest pod mapą. `false` = brak. |
 | `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |
 | `garage_action` | Brama garażowa: encja wywoływana po potwierdzeniu. |

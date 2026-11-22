@@ -23,7 +23,27 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.10";
+const CARD_VERSION = "1.6.0";
+
+// Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
+function roomPoly(config, orient, rk) {
+  const a = config.room_areas && config.room_areas[orient] && config.room_areas[orient][rk];
+  if (!Array.isArray(a) || a.length < 3) return null;
+  const pts = a.filter((p) => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1])).map((p) => [Number(p[0]), Number(p[1])]);
+  return pts.length >= 3 ? pts : null;
+}
+function polyCentroid(pts) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[(i + 1) % pts.length];
+    const f = x0 * y1 - x1 * y0;
+    a += f; cx += (x0 + x1) * f; cy += (y0 + y1) * f;
+  }
+  if (Math.abs(a) < 1e-6) return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  return [cx / (3 * a), cy / (3 * a)];
+}
+const polyCss = (pts) => `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(", ")})`;
 
 // Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
@@ -283,9 +303,18 @@ function buildThemed(config, key) {
     const room = rooms[rk] || {};
     const tr = th.rooms && th.rooms[rk];
     if (!tr) continue;
-    const [il, it] = tr.icon;
+    const poly = roomPoly(config, th.orient, rk);
+    // z narysowanym obszarem ikona idzie na środek obszaru
+    const [il, it] = poly ? polyCentroid(poly) : tr.icon;
     const [tl, tt] = tr.temp || [il, it + 4];
-    if (room.light && tr.light) {
+    if (room.light && poly) {
+      // własny obszar: poświata = rozjaśnione tło przycięte do wielokąta, klik w wielokąt = włącz/wyłącz
+      layers.push({ kind: "light", entity: room.light, poly, bg: `${dir}/${th.bg}${ASSET_Q}`, center: [il, it] });
+      badges.unshift({ kind: "area", entity: room.light, poly, name: room.name || def.name });
+      if (config.light_icons !== false) {
+        badges.push({ kind: "light", entity: room.light, name: room.name || def.name, icon: room.icon, pos: [il, it] });
+      }
+    } else if (room.light && tr.light) {
       const b = tr.light.box;
       layers.push({ kind: "light", entity: room.light, src: `${dir}/${tr.light.file}${ASSET_Q}`, box: b,
         center: [((il - b[0]) / b[2]) * 100, ((it - b[1]) / b[3]) * 100] });
@@ -307,7 +336,7 @@ function buildThemed(config, key) {
       }
     }
     // temperatura pod ikoną pokoju (albo w jej miejscu, gdy pokój nie ma ikony)
-    const withIcon = !!(room.light && tr.light && config.light_icons !== false);
+    const withIcon = !!(room.light && (tr.light || poly) && config.light_icons !== false);
     if (room.temperature || config.show_empty_temp) {
       badges.push({ kind: "temp", entity: room.temperature || null, name: room.name || def.name, pos: [il, it], below: withIcon });
     }
@@ -568,6 +597,7 @@ const BADGE_CSS = `
 .fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
 .fp-sg.fp-gd, .fp-sg.fp-dd { display: block; }
+.fp-area { position: absolute; inset: 0; pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .fp-corner-note { display: inline-block; float: right; padding: 8px 12px; border-radius: 10px; max-width: 100%;
   background: rgba(18, 20, 26, 0.75); color: rgba(255, 255, 255, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);
   font: 500 13px/1.35 var(--paper-font-body1_-_font-family, system-ui, sans-serif); box-sizing: border-box; }
@@ -1061,9 +1091,236 @@ class HaFloorPlanCardEditor extends HTMLElement {
     }
   }
 
+  // ---- Obszary świateł: rysowanie wielokątów na tle planu ----
+  _areaThemeKey(orient) {
+    const cur = resolveTheme(this._config || {}, this._hass);
+    if (cur && THEMES[cur] && THEMES[cur].orient === orient) return cur;
+    return Object.keys(THEMES).find((k) => THEMES[k].orient === orient) || null;
+  }
+
+  _areas() {
+    const a = (this._config && this._config.room_areas) || {};
+    const out = {};
+    for (const [o, rooms] of Object.entries(a)) {
+      if (!rooms || typeof rooms !== "object") continue;
+      out[o] = {};
+      for (const [r, pts] of Object.entries(rooms)) if (Array.isArray(pts)) out[o][r] = pts.map((p) => [Number(p[0]), Number(p[1])]);
+    }
+    return out;
+  }
+
+  _saveAreas(areas, pushUndo = true) {
+    if (pushUndo) {
+      this._areaUndo = this._areaUndo || [];
+      this._areaUndo.push(JSON.stringify(this._areas()));
+      if (this._areaUndo.length > 100) this._areaUndo.shift();
+    }
+    const clean = {};
+    for (const [o, rooms] of Object.entries(areas)) {
+      for (const [r, pts] of Object.entries(rooms || {})) {
+        if (!pts || !pts.length) continue;
+        clean[o] = clean[o] || {};
+        clean[o][r] = pts.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+      }
+    }
+    const c = { ...this._config, room_areas: Object.keys(clean).length ? clean : undefined };
+    this._emit(c);
+    this._drawAreas();
+  }
+
+  _renderAreas() {
+    if (!this._areaEd) {
+      const det = document.createElement("details");
+      det.className = "fp-area-ed";
+      det.innerHTML = `<summary><ha-icon icon="mdi:vector-polygon"></ha-icon><span>Obszary świateł (rysowanie)</span></summary>
+<div class="fp-area-bar">
+  <select class="fp-a-orient"><option value="poziom">Poziomo (komputer)</option><option value="pion">Pionowo (telefon)</option><option value="szeroki">Szeroki (święta)</option></select>
+  <select class="fp-a-room"></select>
+</div>
+<div class="fp-area-help">Wybierz pokój i klikaj po kolei w jego rogi – linie łączą się same, a ostatni punkt łączy się z pierwszym.
+Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), żeby go usunąć. Przerywane prostokąty to obecne obszary domyślne.</div>
+<div class="fp-area-stage"><img alt="" draggable="false"><svg viewBox="0 0 100 100" preserveAspectRatio="none"></svg><div class="fp-area-pts"></div></div>
+<div class="fp-area-bar">
+  <button type="button" class="fp-a-undo">Cofnij</button>
+  <button type="button" class="fp-a-rect">Zacznij od prostokąta</button>
+  <button type="button" class="fp-a-clear">Usuń obszar pokoju</button>
+</div>
+<div class="fp-area-info"></div>`;
+      const st = document.createElement("style");
+      st.textContent = `
+.fp-area-ed { border: 1px solid var(--divider-color, #444); border-radius: 12px; margin: 8px 0; padding: 4px 12px 10px; }
+.fp-area-ed summary { cursor: pointer; padding: 8px 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.fp-area-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.fp-area-bar select, .fp-area-bar button { padding: 8px 10px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--divider-color, #555); background: var(--card-background-color, #1c1f26); color: var(--primary-text-color, #fff); }
+.fp-area-help, .fp-area-info { font-size: 12px; color: var(--secondary-text-color, #aaa); margin: 4px 0; }
+.fp-area-stage { position: relative; user-select: none; -webkit-user-select: none; touch-action: none; cursor: crosshair;
+  border-radius: 8px; overflow: hidden; background: #111; }
+.fp-area-stage img { display: block; width: 100%; height: auto; pointer-events: none; }
+.fp-area-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fp-area-pts { position: absolute; inset: 0; pointer-events: none; }
+.fp-area-pt { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; pointer-events: auto;
+  background: #ffd54a; border: 2px solid #1c1f26; box-shadow: 0 0 0 1px #ffd54a; cursor: grab; box-sizing: border-box; }
+.fp-area-pt.first { background: #4caf50; box-shadow: 0 0 0 1px #4caf50; }
+.fp-area-lbl { position: absolute; transform: translate(-50%, -50%); font: 600 11px/1.2 system-ui, sans-serif; color: #fff;
+  background: rgba(0,0,0,.55); padding: 1px 5px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+.fp-area-lbl.sel { background: #ffb300; color: #000; }`;
+      det.appendChild(st);
+      this._areaEd = det;
+      this.appendChild(det);
+      const q = (sel) => det.querySelector(sel);
+      this._aOrient = q(".fp-a-orient");
+      this._aRoom = q(".fp-a-room");
+      for (const k of Object.keys(ROOMS)) {
+        const o = document.createElement("option");
+        o.value = k;
+        o.textContent = ROOMS[k].name;
+        this._aRoom.appendChild(o);
+      }
+      this._aStage = q(".fp-area-stage");
+      this._aImg = q(".fp-area-stage img");
+      this._aSvg = q(".fp-area-stage svg");
+      this._aPts = q(".fp-area-pts");
+      this._aInfo = q(".fp-area-info");
+      const cur = resolveTheme(this._config || {}, this._hass);
+      if (cur && THEMES[cur]) this._aOrient.value = THEMES[cur].orient;
+      this._aOrient.addEventListener("change", () => this._drawAreas());
+      this._aRoom.addEventListener("change", () => this._drawAreas());
+      const toPct = (ev) => {
+        const r = this._aStage.getBoundingClientRect();
+        return [Math.max(0, Math.min(100, ((ev.clientX - r.left) / r.width) * 100)),
+          Math.max(0, Math.min(100, ((ev.clientY - r.top) / r.height) * 100))];
+      };
+      this._aToPct = toPct;
+      this._aStage.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0 || ev.target.classList.contains("fp-area-pt")) return;
+        ev.preventDefault();
+        const o = this._aOrient.value;
+        const r = this._aRoom.value;
+        const areas = this._areas();
+        areas[o] = areas[o] || {};
+        areas[o][r] = [...(areas[o][r] || []), toPct(ev)];
+        this._saveAreas(areas);
+      });
+      q(".fp-a-undo").addEventListener("click", () => {
+        if (!this._areaUndo || !this._areaUndo.length) return;
+        this._saveAreas(JSON.parse(this._areaUndo.pop()), false);
+      });
+      q(".fp-a-clear").addEventListener("click", () => {
+        const areas = this._areas();
+        const o = this._aOrient.value;
+        if (areas[o]) delete areas[o][this._aRoom.value];
+        this._saveAreas(areas);
+      });
+      q(".fp-a-rect").addEventListener("click", () => {
+        const o = this._aOrient.value;
+        const r = this._aRoom.value;
+        const key = this._areaThemeKey(o);
+        const tr = key && THEMES[key].rooms && THEMES[key].rooms[r];
+        const b = tr && tr.light && tr.light.box;
+        if (!b) return;
+        const areas = this._areas();
+        areas[o] = areas[o] || {};
+        areas[o][r] = [[b[0], b[1]], [b[0] + b[2], b[1]], [b[0] + b[2], b[1] + b[3]], [b[0], b[1] + b[3]]];
+        this._saveAreas(areas);
+      });
+    }
+    if (!this._aDragging) this._drawAreas();
+  }
+
+  _drawAreas() {
+    if (!this._areaEd) return;
+    const o = this._aOrient.value;
+    const sel = this._aRoom.value;
+    const key = this._areaThemeKey(o);
+    const th = key ? THEMES[key] : null;
+    if (!th) { this._aInfo.textContent = "Brak motywu w tej orientacji."; return; }
+    const base = ((this._config && this._config.base_path) || SCRIPT_BASE).replace(/\/$/, "");
+    const src = `${base}/themes/${key}/${th.bg}${ASSET_Q}`;
+    if (this._aImg.getAttribute("src") !== src) this._aImg.src = src;
+    const areas = this._areas()[o] || {};
+    let svg = "";
+    let labels = "";
+    for (const [rk, def] of Object.entries(ROOMS)) {
+      const pts = areas[rk];
+      const tr = th.rooms && th.rooms[rk];
+      const isSel = rk === sel;
+      if (pts && pts.length) {
+        const P = pts.map((p) => p.join(",")).join(" ");
+        svg += pts.length >= 3
+          ? `<polygon points="${P}" fill="${isSel ? "rgba(255,193,7,.28)" : "rgba(76,175,80,.22)"}" stroke="${isSel ? "#ffc107" : "#66bb6a"}" stroke-width="${isSel ? 2.2 : 1.4}" vector-effect="non-scaling-stroke"/>`
+          : `<polyline points="${P}" fill="none" stroke="#ffc107" stroke-width="2.2" vector-effect="non-scaling-stroke"/>`;
+        const [cx, cy] = pts.length >= 3 ? polyCentroid(pts) : pts[0];
+        labels += `<div class="fp-area-lbl${isSel ? " sel" : ""}" style="left:${cx}%;top:${cy}%">${def.name}</div>`;
+      } else if (tr && tr.light && tr.light.box) {
+        const b = tr.light.box;
+        svg += `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" fill="${isSel ? "rgba(255,193,7,.12)" : "none"}" stroke="${isSel ? "#ffc107" : "rgba(255,255,255,.55)"}" stroke-width="${isSel ? 2 : 1}" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
+        labels += `<div class="fp-area-lbl${isSel ? " sel" : ""}" style="left:${b[0] + b[2] / 2}%;top:${b[1] + b[3] / 2}%">${def.name}</div>`;
+      }
+    }
+    this._aSvg.innerHTML = svg;
+    this._aPts.innerHTML = labels;
+    const pts = areas[sel] || [];
+    pts.forEach((p, i) => {
+      const d = document.createElement("div");
+      d.className = i === 0 ? "fp-area-pt first" : "fp-area-pt";
+      d.style.left = `${p[0]}%`;
+      d.style.top = `${p[1]}%`;
+      d.title = `Punkt ${i + 1} – przeciągnij; dwuklik / prawy = usuń`;
+      const remove = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const all = this._areas();
+        all[o][sel].splice(i, 1);
+        this._saveAreas(all);
+      };
+      d.addEventListener("dblclick", remove);
+      d.addEventListener("contextmenu", remove);
+      d.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        d.setPointerCapture(ev.pointerId);
+        const before = JSON.stringify(this._areas());
+        this._aDragging = true;
+        let last = p;
+        const move = (e) => {
+          last = this._aToPct(e);
+          d.style.left = `${last[0]}%`;
+          d.style.top = `${last[1]}%`;
+          const live = this._areas();
+          live[o][sel][i] = last;
+          const P = live[o][sel].map((q) => q.join(",")).join(" ");
+          const shape = this._aSvg.querySelector('[stroke="#ffc107"]');
+          if (shape) shape.setAttribute("points", P);
+        };
+        const up = () => {
+          d.removeEventListener("pointermove", move);
+          d.removeEventListener("pointerup", up);
+          d.removeEventListener("pointercancel", up);
+          this._aDragging = false;
+          if (last === p) return;
+          const all = this._areas();
+          all[o][sel][i] = last;
+          this._areaUndo = this._areaUndo || [];
+          this._areaUndo.push(before);
+          this._saveAreas(all, false);
+        };
+        d.addEventListener("pointermove", move);
+        d.addEventListener("pointerup", up);
+        d.addEventListener("pointercancel", up);
+      });
+      this._aPts.appendChild(d);
+    });
+    this._aInfo.textContent = pts.length
+      ? `${ROOMS[sel].name}: ${pts.length} pkt${pts.length < 3 ? " (potrzeba min. 3, żeby był obszar)" : " – zapisane"}. Motyw w tle: ${key}.`
+      : `${ROOMS[sel].name}: używa obszaru domyślnego (przerywany). Klikaj w rogi, żeby narysować własny. Motyw w tle: ${key}.`;
+  }
+
   async _render() {
     // pola bramy/drzwi/kamer od razu, nawet gdy ha-form jeszcze się nie załadował
     this._renderExtra();
+    this._renderAreas();
     if (!this._form) {
       // ha-form ładuje się leniwie; wymuszamy załadowanie przez edytor wbudowanej karty
       if (!customElements.get("ha-form")) {
@@ -1181,6 +1438,25 @@ class HaFloorPlanCard extends HTMLElement {
     const layer = document.createElement("div");
     Object.assign(layer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" });
     this._layers = layers.map((l) => {
+      if (l.poly) {
+        // narysowany obszar: rozjaśniona kopia tła + ciepła plama, obie przycięte do wielokąta
+        const box = document.createElement("div");
+        Object.assign(box.style, { position: "absolute", inset: "0", opacity: "0", transition: "opacity 0.6s ease",
+          clipPath: polyCss(l.poly), webkitClipPath: polyCss(l.poly) });
+        const img = document.createElement("img");
+        img.src = l.bg;
+        img.alt = "";
+        img.draggable = false;
+        Object.assign(img.style, { position: "absolute", inset: "0", width: "100%", height: "100%",
+          filter: "brightness(1.6) saturate(1.3) sepia(0.3)" });
+        const pool = document.createElement("div");
+        Object.assign(pool.style, { position: "absolute", inset: "0", mixBlendMode: "screen",
+          background: `radial-gradient(ellipse 22% 30% at ${l.center[0]}% ${l.center[1]}%, rgba(255,214,140,0.55) 0%, rgba(255,170,80,0.2) 55%, rgba(255,150,60,0) 100%)` });
+        box.appendChild(img);
+        box.appendChild(pool);
+        layer.appendChild(box);
+        return { ...l, img: box };
+      }
       // kontener w miejscu nakładki; całość płynnie się rozjaśnia/gaśnie
       const box = document.createElement("div");
       Object.assign(box.style, {
@@ -1230,8 +1506,19 @@ class HaFloorPlanCard extends HTMLElement {
     blayer.className = "fp-badges";
     this._badges = badges.map((b) => {
       const el = document.createElement("div");
-      el.style.left = `${b.pos[0]}%`;
-      el.style.top = `${b.pos[1]}%`;
+      if (b.pos) {
+        el.style.left = `${b.pos[0]}%`;
+        el.style.top = `${b.pos[1]}%`;
+      }
+      if (b.kind === "area") {
+        el.className = "fp-area";
+        el.title = `${b.name} - światło`;
+        el.style.clipPath = polyCss(b.poly);
+        el.style.webkitClipPath = polyCss(b.poly);
+        this._bindPress(el, b.entity);
+        blayer.appendChild(el);
+        return b;
+      }
       if (b.kind === "slidegate") {
         el.className = b.svg === "wicket" ? "fp-sg fp-wk" : b.svg === "garage" ? "fp-sg fp-gd" : b.svg === "door" ? "fp-sg fp-dd" : "fp-sg";
         el.style.width = `${b.size[0]}%`;
@@ -1382,6 +1669,7 @@ class HaFloorPlanCard extends HTMLElement {
     const states = (this._hass && this._hass.states) || {};
     const now = Date.now();
     for (const b of this._badges) {
+      if (b.kind === "area") continue;
       const st = b.entity ? states[b.entity] : null;
       if (b.kind === "slidegate") {
         const sv = st ? String(st.state).toLowerCase() : "";
