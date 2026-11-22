@@ -106,6 +106,14 @@ antracytowe skrzydło na kółkach i szyna. Zamknięta brama ma skrzydło międz
 Otwarta ma skrzydło odjechane za słupek (płynnie, w 2 s) i czerwoną kropkę „Brama otwarta”. W ruchu lampki migają,
 a napis brzmi „Brama w ruchu”. Stan bierze się z encji bramy z edytora, tak jak niżej. Przytrzymanie rysunku
 otwiera bramę z potwierdzeniem, a krótki klik pokazuje szczegóły. Ukryjesz go opcją `slide_gate: false`.
+Rysunek jest widoczny zawsze. Dopóki w edytorze nie wybierzesz encji bramy, jest szary z napisem „Brama – brak encji”.
+
+## Furtka
+
+Obok kamery „wejście” (na telefonie pod nią) stoi **furtka** w tym samym stylu: słupki i skrzydło na zawiasach,
+które przy otwarciu obraca się na zawiasie. Ma napis „Furtka otwarta/zamknięta” z kropką. Domyślna encja to `binary_sensor.furtka`.
+W edytorze, w sekcji „Furtka”, ustawisz stan, stan „otwarta” i encję do otwierania (`wicket_action`).
+Przytrzymanie pyta „Na pewno otworzyć furtkę?”. Ukryjesz ją opcją `wicket: false`.
 
 ## Brama: stan i otwieranie
 

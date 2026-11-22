@@ -15,6 +15,7 @@
  * variant: 1|2|3        (opcjonalnie; bez tego warianty zmieniają się codziennie)
  * light_icons: true      (domyślnie; false = sama poświata bez ikon)
  * open_states: { brama: "open", drzwi1: "on" }  (stan oznaczający otwarte)
+ * wicket: true          (furtka obok bramy; covers.furtka, open_states.furtka, wicket_action; false = ukryj)
  * slide_gate: true      (rysunek bramy suwanej przy kamerze „przód”; false = ukryj)
  * gate_action: switch.sterownik_bramy  (co wywołać po „Tak”), gate_hold_ms: 1000
  * cameras: { przod, wejscie, tyl }   (encje camera.*, false = ukryj)
@@ -22,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.2";
+const CARD_VERSION = "1.5.3";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -45,6 +46,7 @@ const DEFAULT_ROOMS = {
 };
 // Brama nie ma domyślnej encji (binary_sensor.brama nie pokazywał stanu) – wybierz ją w edytorze.
 const DEFAULT_COVERS = {
+  furtka: "binary_sensor.furtka",
   drzwi1: "binary_sensor.czujnik_drzwi_garaz_contact",
   drzwi2: "binary_sensor.czujnik_drzwi_glowne_contact",
 };
@@ -381,8 +383,10 @@ function buildThemed(config, key) {
   }
 
   // brama suwana przy kamerze „przód”: obok niej (poziom) albo pod nią (pion)
+  // pokazywana zawsze; bez wybranej encji jest szara z napisem „brak encji”
   const gateEntity = covers.brama || null;
-  if ((gateEntity || config.gate_action) && config.slide_gate !== false) {
+  let gateRect = null;
+  if (config.slide_gate !== false) {
     const cr = camRects.przod;
     const gw = portrait ? 48.5 : 15;
     let gl;
@@ -390,8 +394,27 @@ function buildThemed(config, key) {
     if (cr && portrait) { gl = cr[0]; gt = cr[1] + cr[3] + 1; }
     else if (cr) { gl = Math.min(cr[0] + cr[2] + 0.8, 99.5 - gw); gt = houseBottom + 1.5; }
     else { gl = 1; gt = houseBottom + 1.5; }
-    badges.push({ kind: "slidegate", entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw],
-      openStates: openStatesFor(config, "brama") });
+    gateRect = [gl, gt, gw];
+    badges.push({ kind: "slidegate", svg: "gate", label: "Brama", acc: "bramę", actionKey: "gate_action",
+      entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw], openStates: openStatesFor(config, "brama") });
+  }
+
+  // furtka: obok kamery „wejście” (poziom) albo pod nią (pion)
+  if (config.wicket !== false) {
+    const wEntity = covers.furtka || null;
+    // ta sama skala co brama (słupki tej samej wielkości), ziemia na tej samej linii
+    const gw0 = gateRect ? gateRect[2] : (portrait ? 48.5 : 15);
+    const ww = (gw0 / 290) * 86 * 1.15;
+    const groundShift = (gw0 * 92 / 290 - ww * 84 / 86) / ratio; // różnica wysokości do linii ziemi, w % wysokości
+    let wl;
+    let wt;
+    const cw = camRects.wejscie;
+    if (portrait && cw && gateRect) { wl = cw[0] + (cw[2] - ww) / 2; wt = gateRect[1] + groundShift; }
+    else if (cw && gateRect) { wl = Math.min(cw[0] + cw[2] + 3, 99.5 - ww); wt = gateRect[1] + groundShift; } // obok kamery „wejście”
+    else if (gateRect) { wl = Math.min(gateRect[0] + gateRect[2] + 8, 99.5 - ww); wt = gateRect[1] + groundShift; }
+    else { wl = 30; wt = houseBottom + 1.5; }
+    badges.push({ kind: "slidegate", svg: "wicket", label: "Furtka", acc: "furtkę", actionKey: "wicket_action",
+      entity: wEntity, name: "Furtka", pos: [wl, wt], size: [ww], openStates: openStatesFor(config, "furtka") });
   }
 
   // większe strefy pod spodem, mniejsze na wierzchu (np. warsztat wewnątrz prostokąta salonu)
@@ -498,7 +521,12 @@ const BADGE_CSS = `
   box-shadow: 0 0 8px 1px #3ecf6e; }
 .fp-sg.open .fp-sg-label i { background: #ff4d3a; box-shadow: 0 0 8px 1px #ff4d3a; }
 .fp-sg.moving .fp-sg-label i { background: #ffb347; box-shadow: 0 0 8px 1px #ffb347; }
-.fp-sg.na { opacity: 0.6; }
+.fp-sg.na { opacity: 0.75; filter: grayscale(1); }
+.fp-sg.na .fp-sg-label i { background: #8a8f96; box-shadow: none; }
+.fp-wk-leaf { transform-box: fill-box; transform-origin: left center; transition: transform 1.2s cubic-bezier(0.45, 0, 0.25, 1); }
+.fp-wk.open .fp-wk-leaf { transform: perspective(200px) rotateY(-68deg); }
+.fp-wk .fp-sg-leaf { transition: none; }
+.fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
 .fp-cam { position: absolute; pointer-events: auto; cursor: pointer; box-sizing: border-box;
   border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
@@ -558,6 +586,43 @@ function slideGateSvg(uid) {
   <polygon points="${P(-125, 0)} ${P(150, 0)} ${P(150, 2)} ${P(-125, 2)}" fill="#9aa0a6"/>
   <g transform="matrix(1 ${K} 0 1 0 0)">${leaf}</g>
   ${post(0)}${post(134)}
+</svg>`;
+}
+
+// Furtka: dwa słupki i skrzydło na zawiasach (otwarta = skrzydło obrócone na zawiasie)
+function wicketSvg(uid) {
+  const post = (x0, h) => {
+    const w = 10;
+    return `<polygon points="${x0 + w},0 ${x0 + w + 4},-6 ${x0 + w + 4},${-h - 6} ${x0 + w},${-h}" fill="url(#ps${uid})"/>
+      <rect x="${x0}" y="${-h}" width="${w}" height="${h}" fill="url(#pf${uid})"/>
+      <polygon points="${x0},${-h} ${x0 + w},${-h} ${x0 + w + 4},${-h - 6} ${x0 + 4},${-h - 6}" fill="#c9c3b8"/>
+      <rect x="${x0 - 2}" y="${-h - 4}" width="${w + 4}" height="4" fill="#8f897f"/>
+      <circle cx="${x0 + w / 2}" cy="${-h - 8}" r="2.4" fill="#ffd27a" class="fp-sg-lamp"/>`;
+  };
+  const lx = 10, lw = 46, top = -54, bot = -6;
+  let slats = "";
+  for (let i = 1; i < 6; i++) {
+    const x = lx + (lw * i) / 6;
+    slats += `<rect x="${x - 1.5}" y="${top + 4}" width="3" height="${bot - top - 8}" fill="url(#sl${uid})"/>`;
+  }
+  const leaf = `<g class="fp-wk-leaf">
+    <rect x="${lx}" y="${top}" width="${lw}" height="${bot - top}" rx="1.5" fill="none" stroke="url(#fr${uid})" stroke-width="3.5"/>
+    <rect x="${lx}" y="${(top + bot) / 2 - 1.5}" width="${lw}" height="3" fill="url(#fr${uid})"/>
+    ${slats}
+    <rect x="${lx + lw - 7}" y="${(top + bot) / 2 - 7}" width="3" height="9" rx="1" fill="#c8ccd2"/>
+  </g>`;
+  return `<svg viewBox="-8 -84 86 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <linearGradient id="pf${uid}" x1="0" x2="1"><stop offset="0" stop-color="#b7b0a4"/><stop offset="1" stop-color="#d8d2c6"/></linearGradient>
+    <linearGradient id="ps${uid}" x1="0" x2="1"><stop offset="0" stop-color="#8c867b"/><stop offset="1" stop-color="#6f6a61"/></linearGradient>
+    <linearGradient id="fr${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d636b"/><stop offset=".5" stop-color="#3a3f45"/><stop offset="1" stop-color="#25292d"/></linearGradient>
+    <linearGradient id="sl${uid}" x1="0" x2="1"><stop offset="0" stop-color="#2b2f34"/><stop offset=".45" stop-color="#6a7079"/><stop offset="1" stop-color="#2b2f34"/></linearGradient>
+    <radialGradient id="sh${uid}" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="33" cy="4" rx="44" ry="6" fill="url(#sh${uid})"/>
+  <rect x="-8" y="0" width="86" height="3" fill="#9aa0a6"/>
+  ${leaf}
+  ${post(0, 66)}${post(56, 66)}
 </svg>`;
 }
 
@@ -688,6 +753,11 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "gate_action", label: "Otwieranie bramy – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.gate_action || "", entity: true },
         { id: "gate_hold_ms", label: "Przytrzymanie przycisku bramy przed pytaniem (ms)", value: String(Number(c.gate_hold_ms) || 1000), number: true },
       ] },
+      { group: "Furtka", icon: "mdi:gate", fields: [
+        { id: "cover.furtka", label: "Stan furtki (dowolna encja)", value: covers.furtka || "", entity: true },
+        { id: "open.furtka", label: "Który stan oznacza „otwarta” (puste = on/open/opening)", value: os.furtka || "" },
+        { id: "wicket_action", label: "Otwieranie furtki – encja wywoływana po „Tak” (cover, button, switch, script…)", value: c.wicket_action || "", entity: true },
+      ] },
       { group: "Drzwi", icon: "mdi:door", fields: [
         { id: "cover.drzwi1", label: "Drzwi wejściowe 1 (przy garażu) – stan", value: covers.drzwi1 || "", entity: true },
         { id: "open.drzwi1", label: "Drzwi 1: stan „otwarte”", value: os.drzwi1 || "" },
@@ -718,6 +788,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       if (v) m[key] = v; else delete m[key];
       c.open_states = Object.keys(m).length ? m : undefined;
     } else if (id === "gate_action") c.gate_action = v || undefined;
+    else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
     this._emit(c);
   }
@@ -976,10 +1047,11 @@ class HaFloorPlanCard extends HTMLElement {
       el.style.left = `${b.pos[0]}%`;
       el.style.top = `${b.pos[1]}%`;
       if (b.kind === "slidegate") {
-        el.className = "fp-sg";
+        el.className = b.svg === "wicket" ? "fp-sg fp-wk" : "fp-sg";
         el.style.width = `${b.size[0]}%`;
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
-        el.innerHTML = `${slideGateSvg(Math.random().toString(36).slice(2, 7))}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
+        const uid = Math.random().toString(36).slice(2, 7);
+        el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
         this._bindGate(el, b);
       } else if (b.kind === "gate") {
         el.className = "fp-gate";
@@ -1033,9 +1105,11 @@ class HaFloorPlanCard extends HTMLElement {
         const moving = sv === "opening" || sv === "closing";
         b.el.classList.toggle("open", open || sv === "opening");
         b.el.classList.toggle("moving", moving);
-        b.el.classList.toggle("na", !!b.entity && (!st || sv === "unavailable"));
-        const txt = !b.entity ? "Brama" : !st || sv === "unavailable" ? "Brama – brak danych"
-          : moving ? "Brama w ruchu" : open ? "Brama otwarta" : "Brama zamknięta";
+        b.el.classList.toggle("na", !b.entity || !st || sv === "unavailable");
+        const L = b.label || "Brama";
+        const fem = L === "Brama" || L === "Furtka";
+        const txt = !b.entity ? `${L} – brak encji` : !st ? `${L} – nie ma takiej encji` : sv === "unavailable" ? `${L} – brak danych`
+          : moving ? `${L} w ruchu` : open ? `${L} ${fem ? "otwarta" : "otwarte"}` : `${L} ${fem ? "zamknięta" : "zamknięte"}`;
         const span = b.el.querySelector(".fp-sg-label span");
         if (span.textContent !== txt) span.textContent = txt;
         b._open = open;
@@ -1109,7 +1183,7 @@ class HaFloorPlanCard extends HTMLElement {
       ev.stopPropagation();
       if (held) return;
       cancel();
-      const id = b.entity || this._config.gate_action;
+      const id = b.entity || this._config[b.actionKey || "gate_action"];
       if (id) this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: id }, bubbles: true, composed: true }));
     });
   }
@@ -1117,7 +1191,8 @@ class HaFloorPlanCard extends HTMLElement {
   _confirmGate(b) {
     const wrap = this.querySelector(".fp-wrap");
     if (!wrap || wrap.querySelector(".fp-confirm")) return;
-    const target = this._config.gate_action || b.entity;
+    const target = this._config[b.actionKey || "gate_action"] || b.entity;
+    const acc = b.acc || "bramę";
     const domain = target ? target.split(".")[0] : "";
     const canAct = ["cover", "button", "input_button", "switch", "script", "input_boolean"].includes(domain);
     const closing = domain === "cover" && b._open;
@@ -1128,8 +1203,8 @@ class HaFloorPlanCard extends HTMLElement {
       <div class="fp-confirm-q"></div>
       <div class="fp-confirm-btns"><button class="fp-no">Nie</button><button class="fp-yes">Tak</button></div></div>`;
     dlg.querySelector(".fp-confirm-q").textContent = canAct
-      ? (closing ? "Na pewno zamknąć bramę?" : "Na pewno otworzyć bramę?")
-      : "Nie wybrano encji otwierającej bramę. Ustaw „Otwieranie bramy” w edytorze karty.";
+      ? (closing ? `Na pewno zamknąć ${acc}?` : `Na pewno otworzyć ${acc}?`)
+      : `Nie wybrano encji otwierającej ${acc === "bramę" ? "bramę" : "furtkę"}. Ustaw ją w edytorze karty.`;
     const yes = dlg.querySelector(".fp-yes");
     if (!canAct) yes.remove();
     const close = () => dlg.remove();
