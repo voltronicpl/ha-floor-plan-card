@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.7";
+const CARD_VERSION = "1.5.8";
 
 // Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
@@ -322,6 +322,12 @@ function buildThemed(config, key) {
         openStates: openStatesFor(config, ck), alignLeft: portrait });
       continue;
     }
+    if (ck !== "brama" && tc.open && tc.open.box) {
+      // drzwi: narysowane skrzydło w otworze (otwarte = uchylone, widać jasne wnętrze), nad nimi samo kółko stanu
+      badges.push({ kind: "slidegate", svg: "door", entity: entity || null, name: def.name,
+        pos: [tc.open.box[0], tc.open.box[1]], size: [tc.open.box[2], tc.open.box[3]], openStates: openStatesFor(config, ck) });
+      continue;
+    }
     if (!entity) {
       if (ck === "brama" && config.garage_action) badges.push({ kind: "gate", entity: null, name: def.name, pos: tc.icon, openStates: [], acc: "bramę garażową", actionKey: "garage_action" });
       continue;
@@ -441,7 +447,9 @@ function buildThemed(config, key) {
     layers,
     badges,
     // miejsce na kartę w prawym górnym rogu nad domem (w pionie: null = pod mapą)
-    corner: portrait ? null : { left: Math.max(houseLeft + (houseRight - houseLeft) * 0.42, 40), top: 1, right: Math.min(99, houseRight), bottom: Math.max(6, houseTop - 1) },
+    // od prawego górnego narożnika mapy aż do dachu; z lewej do kamery „tył”
+    corner: portrait ? null : {
+      left: camRects.tyl ? camRects.tyl[0] + camRects.tyl[2] + 1.5 : 30, top: 0.6, right: 99.6, bottom: Math.max(6, houseTop - 0.3) },
   };
 }
 
@@ -553,7 +561,17 @@ const BADGE_CSS = `
 .fp-wk .fp-sg-leaf { transition: none; }
 .fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
-.fp-sg.fp-gd { display: block; }
+.fp-sg.fp-gd, .fp-sg.fp-dd { display: block; }
+.fp-dd svg { width: 100%; height: 100%; filter: none; overflow: visible; }
+.fp-dd-leaf { transform-box: view-box; transform-origin: 70px 50px; transition: transform 0.9s cubic-bezier(0.45, 0, 0.25, 1); }
+.fp-dd.open .fp-dd-leaf { transform: scaleX(-0.45) skewY(-14deg); }
+.fp-dd.na { opacity: 1; filter: none; }
+.fp-dd-dot { position: absolute; left: 37%; top: 0; width: calc(var(--fp-s) * 0.36); height: calc(var(--fp-s) * 0.36);
+  transform: translate(-50%, calc(-100% - var(--fp-s) * 0.14)); border-radius: 50%;
+  background: #3ecf6e; box-shadow: 0 0 10px 2px rgba(62, 207, 110, 0.75), 0 0 0 2px rgba(0, 0, 0, 0.45);
+  transition: background 0.4s ease, box-shadow 0.4s ease; }
+.fp-dd.open .fp-dd-dot { background: #ff4d3a; box-shadow: 0 0 10px 2px rgba(255, 77, 58, 0.8), 0 0 0 2px rgba(0, 0, 0, 0.45); }
+.fp-dd.na .fp-dd-dot { background: #8a8f96; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45); }
 .fp-gd svg { width: 100%; height: 100%; filter: none; }
 .fp-gd-door { transition: transform 2.2s cubic-bezier(0.45, 0, 0.25, 1); }
 .fp-gd.open .fp-gd-door { transform: translateY(-70px); }
@@ -659,6 +677,30 @@ function garageDoorSvg(uid) {
     </g>
     <rect x="0" y="0" width="200" height="4.2" fill="#1d1a17"/>
     <rect x="0" y="4.2" width="200" height="0.7" fill="#000" opacity=".5"/>
+  </g>
+</svg>`;
+}
+
+// Drzwi w otworze: lewa część pola (ok. 4–70%) to otwór, skrzydło na zawiasie przy prawej krawędzi otworu
+// wychyla się na zewnątrz w prawo (jak na obrazkach planu). Otwarte = widać ciepło oświetlony korytarz.
+function doorSvg(uid) {
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <linearGradient id="di${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a4128"/><stop offset=".55" stop-color="#9a7246"/><stop offset="1" stop-color="#d7a96c"/></linearGradient>
+    <radialGradient id="dl${uid}" cx=".5" cy=".1" r=".8"><stop offset="0" stop-color="#ffe2a8" stop-opacity=".9"/><stop offset="1" stop-color="#ffbf6b" stop-opacity="0"/></radialGradient>
+    <linearGradient id="dw${uid}" x1="0" x2="1"><stop offset="0" stop-color="#3a3029"/><stop offset=".5" stop-color="#4a3d34"/><stop offset="1" stop-color="#2f2722"/></linearGradient>
+  </defs>
+  <g class="fp-dd-in">
+    <rect x="4" y="2" width="66" height="92" fill="url(#di${uid})"/>
+    <rect x="4" y="2" width="66" height="92" fill="url(#dl${uid})"/>
+    <polygon points="4,94 14,76 60,76 70,94" fill="#e7bd82" opacity=".35"/>
+  </g>
+  <g class="fp-dd-leaf">
+    <rect x="4" y="2" width="66" height="92" fill="url(#dw${uid})" stroke="#1d1814" stroke-width="1.2"/>
+    <rect x="11" y="9" width="52" height="34" fill="none" stroke="#1d1814" stroke-width="1" opacity=".6"/>
+    <rect x="11" y="49" width="52" height="38" fill="none" stroke="#1d1814" stroke-width="1" opacity=".6"/>
+    <rect x="12" y="44" width="3" height="12" rx="1" fill="#c9c1b4"/>
+    <rect x="12" y="49" width="10" height="2.4" rx="1" fill="#e2dbcf"/>
   </g>
 </svg>`;
 }
@@ -1182,14 +1224,20 @@ class HaFloorPlanCard extends HTMLElement {
       el.style.left = `${b.pos[0]}%`;
       el.style.top = `${b.pos[1]}%`;
       if (b.kind === "slidegate") {
-        el.className = b.svg === "wicket" ? "fp-sg fp-wk" : b.svg === "garage" ? "fp-sg fp-gd" : "fp-sg";
+        el.className = b.svg === "wicket" ? "fp-sg fp-wk" : b.svg === "garage" ? "fp-sg fp-gd" : b.svg === "door" ? "fp-sg fp-dd" : "fp-sg";
         el.style.width = `${b.size[0]}%`;
         if (b.size[1]) el.style.height = `${b.size[1]}%`;
         if (b.alignLeft) el.classList.add("fp-gd-left"); // w pionie napis od lewej krawędzi bramy (nie wychodzi za ekran)
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
         const uid = Math.random().toString(36).slice(2, 7);
-        el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : b.svg === "garage" ? garageDoorSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
-        this._bindGate(el, b);
+        if (b.svg === "door") {
+          el.title = b.name;
+          el.innerHTML = `${doorSvg(uid)}<div class="fp-dd-dot"></div>`;
+          if (b.entity) this._bindPress(el, b.entity, true); // klik = szczegóły czujnika
+        } else {
+          el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : b.svg === "garage" ? garageDoorSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
+          this._bindGate(el, b);
+        }
       } else if (b.kind === "gate") {
         el.className = "fp-gate";
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
@@ -1247,7 +1295,7 @@ class HaFloorPlanCard extends HTMLElement {
         pointerEvents: "none", zIndex: "3",
       });
       const sc = document.createElement("div");
-      const natW = Number(this._config.corner_card_width) || 420; // szerokość karty przed skalowaniem (px)
+      const natW = Number(this._config.corner_card_width) || 520; // szerokość karty przed skalowaniem (px)
       Object.assign(sc.style, { position: "absolute", top: "0", right: "0", width: `${natW}px`,
         transformOrigin: "top right", pointerEvents: "auto" });
       sc.appendChild(inner);
@@ -1259,7 +1307,7 @@ class HaFloorPlanCard extends HTMLElement {
         const w = sc.offsetWidth || natW;
         const h = sc.offsetHeight || 1;
         if (!bw || !bh) return;
-        const k = Math.min(1.6, bw / w, bh / h);
+        const k = Math.min(2.5, bw / w, bh / h);
         sc.style.transform = `scale(${k.toFixed(4)})`;
       };
       if (window.ResizeObserver) {
@@ -1306,7 +1354,7 @@ class HaFloorPlanCard extends HTMLElement {
         const txt = !b.entity ? `${L} – brak encji` : !st ? `${L} – nie ma takiej encji` : sv === "unavailable" ? `${L} – brak danych`
           : moving ? `${L} w ruchu` : open ? `${L} ${fem ? "otwarta" : "otwarte"}` : `${L} ${fem ? "zamknięta" : "zamknięte"}`;
         const span = b.el.querySelector(".fp-sg-label span");
-        if (span.textContent !== txt) span.textContent = txt;
+        if (span && span.textContent !== txt) span.textContent = txt;
         b._open = realOpen;
         continue;
       }

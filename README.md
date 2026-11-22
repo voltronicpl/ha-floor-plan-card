@@ -122,6 +122,8 @@ Od 1.5.4 są **dwie osobne bramy**, każda z własną encją stanu i otwierania:
 - **Brama garażowa** (na planie, w garażu): `covers.brama`, `open_states.brama`, `garage_action`.
 - **Brama wjazdowa** (suwana, przy kamerze „przód”): `covers.brama_wjazdowa`, `open_states.brama_wjazdowa`, `gate_action`.
 
+Drzwi (wejściowe 1 i główne) są narysowane w otworze: otwarte = skrzydło uchylone i widać jasny korytarz. Nad drzwiami jest samo kółko: zielone = zamknięte, czerwone = otwarte, szare = brak encji. Klik pokazuje szczegóły czujnika.
+
 Brama garażowa jest narysowana w otworze garażu jako brama segmentowa: otwarta = panele u góry i widać oświetlone wnętrze, zamknięta = panele zakrywają otwór. Nad nią napis z kropką stanu.
 
 Po przytrzymaniu skrzydło bramy lekko rusza, a po „Tak” brama powoli jedzie (ok. 14 s) z napisem „Brama w ruchu”, aż czujnik potwierdzi stan. Gdy czujnik nic nie zmieni w 25 s, rysunek wraca do prawdziwego stanu.
@@ -240,7 +242,7 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `open_states` | `{ brama: "open", drzwi1: "on" }`: stan oznaczający „otwarte”. |
 | `gate_action` | Brama wjazdowa (suwana): encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
 | `corner_card` | Dowolna karta HA w prawym górnym rogu nad domem, domyślnie `{ type: custom:ems-card, device: ecobss }`. Skaluje się, żeby zmieścić się nad dachem; na telefonie (pion) jest pod mapą. `false` = brak. |
-| `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 420). |
+| `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |
 | `garage_action` | Brama garażowa: encja wywoływana po potwierdzeniu. |
 | `gate_hold_ms` | Jak długo przytrzymać bramę (ms, domyślnie 1000). |
 | `light_icons` | `true` (domyślnie): ikonki światła. `false`: sama poświata. |
