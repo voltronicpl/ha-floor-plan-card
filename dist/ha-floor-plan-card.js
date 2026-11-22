@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.4";
+const CARD_VERSION = "1.5.5";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -490,8 +490,11 @@ const BADGE_CSS = `
   --mdc-icon-size: calc(var(--fp-s) * 0.7); transition: background 0.4s ease, color 0.4s ease; }
 .fp-gate.open { background: rgba(196, 64, 48, 0.85); border-color: rgba(255, 160, 140, 0.9); color: #fff; }
 .fp-gate.na { opacity: 0.5; }
-.fp-hold { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #ffb347;
-  transform: scaleX(0); transform-origin: left; }
+.fp-hold { display: none; }
+.fp-gate { transition: background 0.4s ease, color 0.4s ease, transform var(--fp-hold, 1s) ease; }
+.fp-gate.pressing { transform: translate(-50%, -50%) scale(1.15); }
+.fp-gate.moving ha-icon { animation: fp-pulse 0.9s ease-in-out infinite alternate; }
+@keyframes fp-pulse { to { opacity: 0.35; } }
 .fp-confirm { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.45); pointer-events: auto; }
 .fp-confirm-box { min-width: 220px; max-width: 80%; padding: 18px 20px; border-radius: 16px; text-align: center;
@@ -510,6 +513,10 @@ const BADGE_CSS = `
 .fp-sg svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45)); }
 .fp-sg-leaf { transition: transform 2.2s cubic-bezier(0.45, 0, 0.25, 1); }
 .fp-sg.open .fp-sg-leaf { transform: translateX(-120px); }
+/* przytrzymanie: skrzydło lekko rusza w stronę, w którą pojedzie; po „Tak” jedzie powoli jak prawdziwa brama */
+.fp-sg.pressing .fp-sg-leaf { transition: transform var(--fp-hold, 1s) ease-out; transform: translateX(-16px); }
+.fp-sg.open.pressing .fp-sg-leaf { transform: translateX(-104px); }
+.fp-sg.anim .fp-sg-leaf { transition: transform 14s linear; }
 .fp-sg-lamp { opacity: 0.35; transition: opacity 0.4s ease; }
 .fp-sg.moving .fp-sg-lamp { animation: fp-blink 0.8s steps(2, start) infinite; opacity: 1; fill: #ffa53a; }
 @keyframes fp-blink { to { visibility: hidden; } }
@@ -526,6 +533,10 @@ const BADGE_CSS = `
 .fp-sg.na .fp-sg-label i { background: #8a8f96; box-shadow: none; }
 .fp-wk-leaf { transform-box: fill-box; transform-origin: left center; transition: transform 1.2s cubic-bezier(0.45, 0, 0.25, 1); }
 .fp-wk.open .fp-wk-leaf { transform: perspective(200px) rotateY(-68deg); }
+.fp-wk.pressing .fp-wk-leaf { transition: transform var(--fp-hold, 1s) ease-out; transform: perspective(200px) rotateY(-14deg); }
+.fp-wk.open.pressing .fp-wk-leaf { transform: perspective(200px) rotateY(-54deg); }
+.fp-wk.anim .fp-wk-leaf { transition: transform 3s ease-in-out; }
+.fp-wk.pressing .fp-sg-leaf, .fp-wk.open.pressing .fp-sg-leaf { transform: none; }
 .fp-wk .fp-sg-leaf { transition: none; }
 .fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
@@ -583,8 +594,6 @@ function slideGateSvg(uid) {
     <radialGradient id="sh${uid}" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
   </defs>
   <ellipse cx="${P(60, 0).split(",")[0]}" cy="${(+P(60, 0).split(",")[1] + 4).toFixed(1)}" rx="135" ry="9" fill="url(#sh${uid})" />
-  <polygon points="${P(-125, 2)} ${P(150, 2)} ${P(150, 6)} ${P(-125, 6)}" fill="#55585c"/>
-  <polygon points="${P(-125, 0)} ${P(150, 0)} ${P(150, 2)} ${P(-125, 2)}" fill="#9aa0a6"/>
   <g transform="matrix(1 ${K} 0 1 0 0)">${leaf}</g>
   ${post(0)}${post(134)}
 </svg>`;
@@ -1132,7 +1141,8 @@ class HaFloorPlanCard extends HTMLElement {
         if (b.entity) this._bindPress(el, b.entity, true);
       }
       blayer.appendChild(el);
-      return { ...b, el };
+      b.el = el; // ten sam obiekt co w _bindGate (stan otwarta/animacja)
+      return b;
     });
     wrap.appendChild(blayer);
 
@@ -1155,8 +1165,11 @@ class HaFloorPlanCard extends HTMLElement {
       const st = b.entity ? states[b.entity] : null;
       if (b.kind === "slidegate") {
         const sv = st ? String(st.state).toLowerCase() : "";
-        const open = !!st && (b.openStates || DEFAULT_OPEN).includes(sv);
-        const moving = sv === "opening" || sv === "closing";
+        const realOpen = !!st && (b.openStates || DEFAULT_OPEN).includes(sv);
+        const pend = this._pendingFor(b, realOpen, now);
+        const open = pend ? pend.target : realOpen;
+        const moving = !!pend || sv === "opening" || sv === "closing";
+        b.el.classList.toggle("anim", !!pend);
         b.el.classList.toggle("open", open || sv === "opening");
         b.el.classList.toggle("moving", moving);
         b.el.classList.toggle("na", !b.entity || !st || sv === "unavailable");
@@ -1166,17 +1179,20 @@ class HaFloorPlanCard extends HTMLElement {
           : moving ? `${L} w ruchu` : open ? `${L} ${fem ? "otwarta" : "otwarte"}` : `${L} ${fem ? "zamknięta" : "zamknięte"}`;
         const span = b.el.querySelector(".fp-sg-label span");
         if (span.textContent !== txt) span.textContent = txt;
-        b._open = open;
+        b._open = realOpen;
         continue;
       }
       if (b.kind === "gate") {
-        const open = !!st && (b.openStates || DEFAULT_OPEN).includes(String(st.state).toLowerCase());
+        const realOpen = !!st && (b.openStates || DEFAULT_OPEN).includes(String(st.state).toLowerCase());
+        const pend = this._pendingFor(b, realOpen, now);
+        const open = pend ? pend.target : realOpen;
+        b.el.classList.toggle("moving", !!pend);
         b.el.classList.toggle("open", open);
         b.el.classList.toggle("na", !!b.entity && (!st || st.state === "unavailable"));
         const ic = b.el.firstChild;
         const want = open ? "mdi:garage-open" : "mdi:garage";
         if (ic.getAttribute("icon") !== want) ic.setAttribute("icon", want);
-        b._open = open;
+        b._open = realOpen;
         continue;
       }
       if (b.kind === "camera") {
@@ -1211,23 +1227,30 @@ class HaFloorPlanCard extends HTMLElement {
     }
   }
 
+  // Animacja po „Tak”: brama jedzie do stanu docelowego (ok. 14 s), aż czujnik to potwierdzi.
+  // Gdy czujnik nic nie zmieni w 25 s, wraca do prawdziwego stanu.
+  _pendingFor(b, realOpen, now) {
+    const p = b._pending;
+    if (!p) return null;
+    if (now > p.until || (now > p.start + 14000 && realOpen === p.target)) { b._pending = null; return null; }
+    return p;
+  }
+
   // Brama: klik = szczegóły, przytrzymanie (gate_hold_ms, domyślnie 1 s) = okno „Na pewno…?”
   _bindGate(el, b) {
     const holdMs = Number(this._config.gate_hold_ms) || 1000;
     let timer = null;
     let held = false;
-    const bar = el.querySelector(".fp-hold");
+    el.style.setProperty("--fp-hold", `${holdMs}ms`);
     const cancel = () => {
       if (timer) clearTimeout(timer);
       timer = null;
-      bar.style.transition = "none";
-      bar.style.transform = "scaleX(0)";
+      el.classList.remove("pressing");
     };
     el.addEventListener("contextmenu", (ev) => ev.preventDefault());
     el.addEventListener("pointerdown", () => {
       held = false;
-      bar.style.transition = `transform ${holdMs}ms linear`;
-      bar.style.transform = "scaleX(1)";
+      el.classList.add("pressing");
       timer = setTimeout(() => { held = true; cancel(); this._confirmGate(b); }, holdMs);
     });
     el.addEventListener("pointerup", () => { if (!held) cancel(); });
@@ -1272,6 +1295,12 @@ class HaFloorPlanCard extends HTMLElement {
       else if (domain === "button" || domain === "input_button") this._hass.callService(domain, "press", data);
       else if (domain === "switch" || domain === "script") this._hass.callService(domain, "turn_on", data);
       else if (domain === "input_boolean") this._hass.callService("input_boolean", "toggle", data);
+      // animacja bramy zamiast paska: jedzie od razu, czujnik potem potwierdza
+      const now = Date.now();
+      b._pending = { target: !b._open, start: now, until: now + 25000 };
+      this._updateLayers();
+      setTimeout(() => this._updateLayers(), 14100);
+      setTimeout(() => this._updateLayers(), 25100);
     });
     wrap.appendChild(dlg);
   }
