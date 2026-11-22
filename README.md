@@ -243,6 +243,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `gate_action` | Brama wjazdowa (suwana): encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
 | `room_areas` | Obszary świateł narysowane w edytorze (sekcja „Obszary świateł (rysowanie)”): `{ poziom: { salon: [[x%, y%], …] }, pion: {…}, szeroki: {…} }`. Pokój z obszarem świeci w swoim kształcie, klik w niego przełącza światło. Przycisk „Przenieś na inne układy” przelicza narysowane obszary na telefon i szeroki według obrysu domu. |
 | `corner_card` | (Mapa czeka na tę kartę bez limitu i wstawia ją, gdy się załaduje.) Dowolna karta HA w prawym górnym rogu nad domem, domyślnie `{ type: custom:ems-card, device: ecobss }`. Skaluje się, żeby zmieścić się nad dachem; na telefonie (pion) jest pod mapą. `false` = brak. |
+| `gate_in_fence` | Brama wjazdowa (naprzeciwko garażu, długie skrzydło) i furtka (naprzeciwko drzwi głównych) stoją w płocie przy dolnej krawędzi; kamera „przód” za bramą, „wejście” w prawym rogu. `false` = stare ułożenie. |
+| `fence_y` | Linia ziemi płotu w % wysokości obrazka (domyślnie 99,3). |
 | `corner_card_grow` | O ile % wysokości mapy karta w rogu może zejść na dach (domyślnie 4). Większa liczba = większa karta. |
 | `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |
 | `garage_action` | Brama garażowa: encja wywoływana po potwierdzeniu. |

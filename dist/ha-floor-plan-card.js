@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.3";
+const CARD_VERSION = "1.6.4";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -405,6 +405,30 @@ function buildThemed(config, key) {
     if (w > maxW) { w = maxW; h = (w * 9) / 16 / ratio; }
     return [w, h];
   };
+  // Brama wjazdowa i furtka w płocie przy dolnej krawędzi (tła z ogrodzeniem): brama naprzeciwko garażowej,
+  // furtka naprzeciwko drzwi głównych. fence_y (% wysokości) = linia ziemi płotu, domyślnie 99,3.
+  const fenceY = isFinite(Number(config.fence_y)) && config.fence_y !== undefined ? Number(config.fence_y) : 99.3;
+  const postPx = th.h * (portrait ? 0.034 : 0.056); // wysokość słupka ≈ wysokość płotu na obrazku
+  const inFence = config.gate_in_fence !== false;
+  let fenceGate = null;
+  let fenceWicket = null;
+  if (inFence) {
+    const gb = th.covers && th.covers.brama && th.covers.brama.open && th.covers.brama.open.box;
+    const db = th.covers && th.covers.drzwi2 && th.covers.drzwi2.open && th.covers.drzwi2.open.box;
+    const u = postPx / 78;
+    if (gb) {
+      const cx = (gb[0] + gb[2] / 2) / 100 * th.w;
+      const L = (gb[2] / 100 * th.w * 1.3) / u; // dłuższe skrzydło: cały wjazd szerszy niż garaż
+      const leftPx = cx - (L / 2 + 12 + L + 3) * u;
+      fenceGate = { L, rect: [leftPx / th.w * 100, (fenceY / 100 * th.h - 92 * u) / th.h * 100, (2 * L + 32) * u / th.w * 100],
+        right: (cx + (L / 2 + 24) * u) / th.w * 100 };
+    }
+    if (db) {
+      const uw = (74 * u) / 66;
+      const cx = (db[0] + db[2] * 0.37) / 100 * th.w;
+      fenceWicket = [(cx - 41 * uw) / th.w * 100, (fenceY / 100 * th.h - 84 * uw) / th.h * 100, 86 * uw / th.w * 100];
+    }
+  }
   const cams = { ...DEFAULT_CAMERAS, ...(config.cameras || {}) };
   const camRects = {};
   for (const [camKey, def] of Object.entries(CAMERAS)) {
@@ -419,10 +443,17 @@ function buildThemed(config, key) {
       // przód / wejście: górną krawędzią dotyka domu, rozciągnięte w dół do krawędzi obrazka
       const tc = th.covers && th.covers[def.anchor];
       if (!tc) continue;
-      const avail = Math.max(4, 98.5 - houseBottom);
+      // w pionie kamery kończą się nad bramą/furtką w płocie (z miejscem na napis)
+      const bottomLim = portrait && (fenceGate || fenceWicket) ? fenceY - (postPx / th.h * 100) * 1.35 - 5 : 98.5;
+      const avail = Math.max(4, bottomLim - houseBottom);
       const [w, h169] = fit(avail);
       const h = Math.min(avail, h169 * 1.6); // rozciągnięte w dół (obraz kadrowany), max 1,6× wysokości 16:9
       let l = Math.min(Math.max(0.5, tc.icon[0] - w / 2), 99.5 - w);
+      if (!portrait && inFence) {
+        // przód: trochę w prawo, za bramą w płocie; wejście: prawy róg
+        if (def.anchor === "brama") l = Math.min(99.5 - w, Math.max(l + 3, fenceGate ? fenceGate.right + 1.5 : l + 3));
+        else l = 99.5 - w;
+      }
       if (portrait) l = def.anchor === "brama" ? 0.5 : 51; // w pionie dwie kamery obok siebie
       rect = [l, houseBottom, w, h];
     }
@@ -440,16 +471,29 @@ function buildThemed(config, key) {
     const gw = portrait ? 48.5 : 15;
     let gl;
     let gt;
+    if (fenceGate) {
+      // w płocie naprzeciwko bramy garażowej, dłuższe skrzydło
+      [gl, gt] = fenceGate.rect;
+      gateRect = fenceGate.rect;
+      badges.push({ kind: "slidegate", svg: "gate", label: "Brama", acc: "bramę", actionKey: "gate_action", up: true,
+        leaf: fenceGate.L, entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [fenceGate.rect[2]],
+        openStates: openStatesFor(config, "brama_wjazdowa") });
+    } else {
     if (cr && portrait) { gl = cr[0]; gt = cr[1] + cr[3] + 1; }
     else if (cr) { gl = Math.min(cr[0] + cr[2] + 0.8, 99.5 - gw); gt = houseBottom + 1.5; }
     else { gl = 1; gt = houseBottom + 1.5; }
     gateRect = [gl, gt, gw];
     badges.push({ kind: "slidegate", svg: "gate", label: "Brama", acc: "bramę", actionKey: "gate_action",
       entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw], openStates: openStatesFor(config, "brama_wjazdowa") });
+    }
   }
 
   // furtka: obok kamery „wejście” (poziom) albo pod nią (pion)
-  if (config.wicket !== false) {
+  if (config.wicket !== false && fenceWicket) {
+    badges.push({ kind: "slidegate", svg: "wicket", label: "Furtka", acc: "furtkę", actionKey: "wicket_action", up: true,
+      entity: covers.furtka || null, name: "Furtka", pos: [fenceWicket[0], fenceWicket[1]], size: [fenceWicket[2]],
+      openStates: openStatesFor(config, "furtka") });
+  } else if (config.wicket !== false) {
     const wEntity = covers.furtka || null;
     // ta sama skala co brama (słupki tej samej wielkości), ziemia na tej samej linii
     const gw0 = gateRect ? gateRect[2] : (portrait ? 48.5 : 15);
@@ -570,10 +614,11 @@ const BADGE_CSS = `
   touch-action: none; -webkit-touch-callout: none; display: flex; flex-direction: column; align-items: center; }
 .fp-sg svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45)); }
 .fp-sg-leaf { transition: transform 2.2s cubic-bezier(0.45, 0, 0.25, 1); }
-.fp-sg.open .fp-sg-leaf { transform: translateX(-120px); }
+.fp-sg.open .fp-sg-leaf { transform: translateX(var(--fp-slide, -120px)); }
+.fp-sg.fp-up .fp-sg-label { position: absolute; bottom: 100%; left: var(--fp-lbl-x, 50%); transform: translateX(-50%); margin: 0 0 2px; }
 /* przytrzymanie: skrzydło lekko rusza w stronę, w którą pojedzie; po „Tak” jedzie powoli jak prawdziwa brama */
 .fp-sg.pressing .fp-sg-leaf { transition: transform var(--fp-hold, 1s) ease-out; transform: translateX(-16px); }
-.fp-sg.open.pressing .fp-sg-leaf { transform: translateX(-104px); }
+.fp-sg.open.pressing .fp-sg-leaf { transform: translateX(calc(var(--fp-slide, -120px) + 16px)); }
 .fp-sg.anim .fp-sg-leaf { transition: transform 14s linear; }
 .fp-sg-lamp { opacity: 0.35; transition: opacity 0.4s ease; }
 .fp-sg.moving .fp-sg-lamp { animation: fp-blink 0.8s steps(2, start) infinite; opacity: 1; fill: #ffa53a; }
@@ -637,7 +682,7 @@ const BADGE_CSS = `
 `;
 
 // ==== BRAMA SUWANA (rysunek SVG w stylu planu, bez bibliotek) ====
-function slideGateSvg(uid) {
+function slideGateSvg(uid, L = 122) {
   const K = 0; // pochylenie płaszczyzny frontu
   const P = (x, y) => `${x.toFixed(1)},${(y + K * x).toFixed(1)}`;
   const D = [5, -8]; // wektor głębokości
@@ -654,10 +699,11 @@ function slideGateSvg(uid) {
     return `${side}${poly(f, `url(#pf${uid})`)}${top}${cap}${lamp}`;
   };
   // skrzydło bramy w lokalnych współrzędnych frontu (przesuwane klasą .open)
-  const leafX0 = 12, leafW = 122, top = -54, bot = -8;
+  const leafX0 = 12, leafW = L, top = -54, bot = -8;
+  const nSl = Math.max(6, Math.round(leafW / 9.4));
   let slats = "";
-  for (let i = 1; i < 13; i++) {
-    const x = leafX0 + (leafW * i) / 13;
+  for (let i = 1; i < nSl; i++) {
+    const x = leafX0 + (leafW * i) / nSl;
     slats += `<rect x="${x - 1.6}" y="${top + 4}" width="3.2" height="${bot - top - 8}" fill="url(#sl${uid})"/>`;
   }
   const leaf = `<g class="fp-sg-leaf">
@@ -667,7 +713,7 @@ function slideGateSvg(uid) {
     <circle cx="${leafX0 + 14}" cy="${bot + 3}" r="3.2" fill="#2a2d31" stroke="#6b7077" stroke-width="1"/>
     <circle cx="${leafX0 + leafW - 14}" cy="${bot + 3}" r="3.2" fill="#2a2d31" stroke="#6b7077" stroke-width="1"/>
   </g>`;
-  return `<svg viewBox="-125 -92 290 106" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  return `<svg viewBox="${-(L + 3)} -92 ${2 * L + 32} 106" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs>
     <linearGradient id="pf${uid}" x1="0" x2="1"><stop offset="0" stop-color="#b7b0a4"/><stop offset="1" stop-color="#d8d2c6"/></linearGradient>
     <linearGradient id="ps${uid}" x1="0" x2="1"><stop offset="0" stop-color="#8c867b"/><stop offset="1" stop-color="#6f6a61"/></linearGradient>
@@ -675,9 +721,9 @@ function slideGateSvg(uid) {
     <linearGradient id="sl${uid}" x1="0" x2="1"><stop offset="0" stop-color="#2b2f34"/><stop offset=".45" stop-color="#6a7079"/><stop offset="1" stop-color="#2b2f34"/></linearGradient>
     <radialGradient id="sh${uid}" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
   </defs>
-  <ellipse cx="${P(60, 0).split(",")[0]}" cy="${(+P(60, 0).split(",")[1] + 4).toFixed(1)}" rx="135" ry="9" fill="url(#sh${uid})" />
+  <ellipse cx="${(L + 24) / 2}" cy="4" rx="${L * 0.6 + 20}" ry="7" fill="url(#sh${uid})" />
   <g transform="matrix(1 ${K} 0 1 0 0)">${leaf}</g>
-  ${post(0)}${post(134)}
+  ${post(0)}${post(L + 12)}
 </svg>`;
 }
 
@@ -1555,7 +1601,11 @@ class HaFloorPlanCard extends HTMLElement {
         el.className = b.svg === "wicket" ? "fp-sg fp-wk" : b.svg === "garage" ? "fp-sg fp-gd" : b.svg === "door" ? "fp-sg fp-dd" : "fp-sg";
         el.style.width = `${b.size[0]}%`;
         if (b.size[1]) el.style.height = `${b.size[1]}%`;
-        if (b.alignLeft) el.classList.add("fp-gd-left"); // w pionie napis od lewej krawędzi bramy (nie wychodzi za ekran)
+        if (b.alignLeft) el.classList.add("fp-gd-left");
+        if (b.up) el.classList.add("fp-up"); // napis nad bramą/furtką (stoją w płocie przy dolnej krawędzi)
+        if (b.leaf) el.style.setProperty("--fp-slide", `${-(b.leaf - 2)}px`);
+        // napis nad środkiem wjazdu (nie nad pustym miejscem na odsunięte skrzydło)
+        if (b.leaf) el.style.setProperty("--fp-lbl-x", `${((b.leaf + 3 + (b.leaf + 24) / 2) / (2 * b.leaf + 32)) * 100}%`); // w pionie napis od lewej krawędzi bramy (nie wychodzi za ekran)
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
         const uid = Math.random().toString(36).slice(2, 7);
         if (b.svg === "door") {
@@ -1563,7 +1613,7 @@ class HaFloorPlanCard extends HTMLElement {
           el.innerHTML = `${doorSvg(uid)}<div class="fp-dd-dot"></div>`;
           if (b.entity) this._bindPress(el, b.entity, true); // klik = szczegóły czujnika
         } else {
-          el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : b.svg === "garage" ? garageDoorSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
+          el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : b.svg === "garage" ? garageDoorSvg(uid) : slideGateSvg(uid, b.leaf || 122)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
           this._bindGate(el, b);
         }
       } else if (b.kind === "gate") {
