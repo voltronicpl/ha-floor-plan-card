@@ -134,7 +134,7 @@ W edytorze każde pole encji ma natywny wybór z listy HA oraz pole do ręcznego
   i wpisz, jaki stan oznacza „otwarta” (np. `open` albo `on`, kilka po przecinku). Każdy inny stan to zamknięta.
   Otwarta brama jest na planie fizycznie otwarta, a jej przycisk robi się czerwony. To samo pole jest dla drzwi.
 - **Otwieranie:** **przytrzymaj** przycisk bramy (domyślnie 1 s, pasek pokazuje postęp, ustawia się w `gate_hold_ms`).
-  Pojawi się pytanie **„Na pewno otworzyć bramę?”** z przyciskami Tak i Nie. Po „Tak” karta wywołuje encję
+  Tuż nad bramą (albo pod nią, gdy u góry brak miejsca) pojawi się pytanie **„Na pewno otworzyć bramę?”** z przyciskami Tak i Nie. Po „Tak” karta wywołuje encję
   z pola „Otwieranie bramy” (`gate_action`): `cover` otwiera albo zamyka, `button` naciska, `switch` i `script` włącza.
   Krótki klik w przycisk pokazuje szczegóły.
 

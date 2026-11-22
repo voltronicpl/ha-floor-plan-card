@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.8";
+const CARD_VERSION = "1.5.9";
 
 // Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
@@ -516,8 +516,12 @@ const BADGE_CSS = `
 .fp-gate.pressing { transform: translate(-50%, -50%) scale(1.15); }
 .fp-gate.moving ha-icon { animation: fp-pulse 0.9s ease-in-out infinite alternate; }
 @keyframes fp-pulse { to { opacity: 0.35; } }
-.fp-confirm { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.45); pointer-events: auto; }
+.fp-confirm { position: absolute; inset: 0; z-index: 5; background: rgba(0, 0, 0, 0.25); pointer-events: auto; }
+.fp-confirm .fp-confirm-box { position: absolute; max-width: min(320px, 90%); box-sizing: border-box; }
+.fp-confirm-box::after { content: ""; position: absolute; left: var(--fp-arrow, 50%); width: 14px; height: 14px;
+  background: var(--card-background-color, #1c1f26); transform: translateX(-50%) rotate(45deg); }
+.fp-confirm-box.above::after { bottom: -7px; }
+.fp-confirm-box.below::after { top: -7px; }
 .fp-confirm-box { min-width: 220px; max-width: 80%; padding: 18px 20px; border-radius: 16px; text-align: center;
   background: var(--card-background-color, #1c1f26); color: var(--primary-text-color, #fff);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); --mdc-icon-size: 40px;
@@ -1479,6 +1483,27 @@ class HaFloorPlanCard extends HTMLElement {
       setTimeout(() => this._updateLayers(), 25100);
     });
     wrap.appendChild(dlg);
+    this._placeConfirm(wrap, dlg.querySelector(".fp-confirm-box"), b.el);
+  }
+
+  // okienko tuż nad przedmiotem (nie zasłania go); gdy u góry brak miejsca – pod nim; zawsze w granicach mapy
+  _placeConfirm(wrap, box, target) {
+    if (!box || !target) return;
+    const wr = wrap.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    const bw = box.offsetWidth;
+    const bh = box.offsetHeight;
+    const gap = 12;
+    const cx = tr.left + tr.width / 2 - wr.left;
+    const left = Math.max(4, Math.min(wr.width - bw - 4, cx - bw / 2));
+    const spaceAbove = tr.top - wr.top;
+    const above = spaceAbove >= bh + gap + 4 || spaceAbove > wr.bottom - tr.bottom;
+    let top = above ? spaceAbove - bh - gap : tr.bottom - wr.top + gap;
+    top = Math.max(4, Math.min(wr.height - bh - 4, top));
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.classList.add(above ? "above" : "below");
+    box.style.setProperty("--fp-arrow", `${Math.max(16, Math.min(bw - 16, cx - left))}px`);
   }
 
   // klik = przełącz (światło), przytrzymanie / klik w temperaturę = szczegóły encji
