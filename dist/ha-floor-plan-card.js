@@ -23,7 +23,10 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.6";
+const CARD_VERSION = "1.5.7";
+
+// Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
+const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -352,6 +355,7 @@ function buildThemed(config, key) {
   const coverBoxes = Object.values(th.covers || {}).map((x) => x.open && x.open.box).filter(Boolean);
   const houseTop = Math.min(...roomBoxes.map((b) => b[1]));
   const houseLeft = Math.min(...roomBoxes.map((b) => b[0]));
+  const houseRight = Math.max(...roomBoxes.map((b) => b[0] + b[2]));
   const houseBottom = coverBoxes.length
     ? Math.max(...coverBoxes.map((b) => b[1] + b[3]))
     : Math.max(...roomBoxes.map((b) => b[1] + b[3])) + 5;
@@ -436,6 +440,8 @@ function buildThemed(config, key) {
     },
     layers,
     badges,
+    // miejsce na kartę w prawym górnym rogu nad domem (w pionie: null = pod mapą)
+    corner: portrait ? null : { left: Math.max(houseLeft + (houseRight - houseLeft) * 0.42, 40), top: 1, right: Math.min(99, houseRight), bottom: Math.max(6, houseTop - 1) },
   };
 }
 
@@ -721,6 +727,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       show_empty_temp: !!c.show_empty_temp,
       winter_from_nov15: c.winter_from_nov15 !== false,
       fullscreen: c.fullscreen !== false,
+      corner_card: c.corner_card === false ? undefined : (c.corner_card || DEFAULT_CORNER_CARD),
     };
     for (const k of EDITOR_ROOMS) {
       const r = rooms[k] || {};
@@ -751,6 +758,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       { name: "show_empty_temp", selector: { boolean: {} } },
       { name: "winter_from_nov15", selector: { boolean: {} } },
       { name: "fullscreen", selector: { boolean: {} } },
+      { name: "corner_card", selector: { object: {} } },
       ...EDITOR_ROOMS.map((k) => ({
         type: "expandable", flatten: true, title: ROOMS[k].name, icon: "mdi:floor-plan",
         schema: [
@@ -767,6 +775,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       theme: "Motyw", variant: "Wariant motywu", light_icons: "Ikonki światła",
       show_empty_temp: "Pokaż „–” w pokojach bez czujnika temperatury",
       winter_from_nov15: "Zima od 15 listopada", fullscreen: "Pełny ekran",
+      corner_card: "Karta w prawym górnym rogu nad domem (YAML, np. type: custom:ems-card; puste = brak)",
     };
     if (labels[n]) return labels[n];
     if (n.endsWith("__light")) return "Światło";
@@ -789,6 +798,10 @@ class HaFloorPlanCardEditor extends HTMLElement {
     c.show_empty_temp = d.show_empty_temp ? true : undefined;
     c.winter_from_nov15 = d.winter_from_nov15 === false ? false : undefined;
     c.fullscreen = d.fullscreen === false ? false : undefined;
+    const cc = d.corner_card;
+    if (!cc || typeof cc !== "object" || !Object.keys(cc).length) c.corner_card = false;
+    else if (JSON.stringify(cc) === JSON.stringify(DEFAULT_CORNER_CARD)) c.corner_card = undefined;
+    else c.corner_card = cc;
     const rooms = {};
     for (const k of EDITOR_ROOMS) {
       const light = d[`${k}__light`] || undefined;
@@ -1084,7 +1097,8 @@ class HaFloorPlanCard extends HTMLElement {
     let cfg;
     let layers = [];
     let badges = [];
-    if (key) ({ cfg, layers, badges } = buildThemed(this._config, key));
+    let corner = null;
+    if (key) ({ cfg, layers, badges, corner } = buildThemed(this._config, key));
     else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
@@ -1205,10 +1219,64 @@ class HaFloorPlanCard extends HTMLElement {
       return b;
     });
     wrap.appendChild(blayer);
+    const cornerBelow = this._addCornerCard(helpers, wrap, corner);
 
     this.appendChild(wrap);
+    if (cornerBelow) this.appendChild(cornerBelow);
     this._card = card;
     this._updateLayers();
+  }
+
+  // Dowolna karta HA (np. EMS) w prawym górnym rogu nad domem; skalowana, żeby zmieściła się nad dachem.
+  // W pionie (telefon) ląduje pod mapą. Dom się nie przesuwa.
+  _addCornerCard(helpers, wrap, corner) {
+    if (this._cornerRO) { this._cornerRO.disconnect(); this._cornerRO = null; }
+    this._corner = null;
+    const cc = this._config.corner_card === undefined ? DEFAULT_CORNER_CARD : this._config.corner_card;
+    if (!cc || typeof cc !== "object" || !cc.type) return;
+    let inner;
+    try { inner = helpers.createCardElement(cc); } catch (e) { console.error("ha-floor-plan-card corner_card:", e); return; }
+    if (this._hass) inner.hass = this._hass;
+    this._corner = inner;
+    if (corner) {
+      const box = document.createElement("div");
+      box.className = "fp-corner";
+      Object.assign(box.style, {
+        position: "absolute", left: `${corner.left}%`, top: `${corner.top}%`,
+        width: `${corner.right - corner.left}%`, height: `${corner.bottom - corner.top}%`,
+        pointerEvents: "none", zIndex: "3",
+      });
+      const sc = document.createElement("div");
+      const natW = Number(this._config.corner_card_width) || 420; // szerokość karty przed skalowaniem (px)
+      Object.assign(sc.style, { position: "absolute", top: "0", right: "0", width: `${natW}px`,
+        transformOrigin: "top right", pointerEvents: "auto" });
+      sc.appendChild(inner);
+      box.appendChild(sc);
+      wrap.appendChild(box);
+      const fit = () => {
+        const bw = box.clientWidth;
+        const bh = box.clientHeight;
+        const w = sc.offsetWidth || natW;
+        const h = sc.offsetHeight || 1;
+        if (!bw || !bh) return;
+        const k = Math.min(1.6, bw / w, bh / h);
+        sc.style.transform = `scale(${k.toFixed(4)})`;
+      };
+      if (window.ResizeObserver) {
+        this._cornerRO = new ResizeObserver(fit);
+        this._cornerRO.observe(box);
+        this._cornerRO.observe(sc);
+      }
+      setTimeout(fit, 50);
+      setTimeout(fit, 1500);
+    } else {
+      const below = document.createElement("div");
+      below.className = "fp-corner-below";
+      Object.assign(below.style, { position: "relative", marginTop: "8px" });
+      below.appendChild(inner);
+      return below;
+    }
+    return null;
   }
 
   _updateLayers() {
@@ -1391,6 +1459,7 @@ class HaFloorPlanCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this._card) this._card.hass = hass;
+    if (this._corner) this._corner.hass = hass;
     this._updateLayers();
     this._refresh(); // np. zachód słońca -> motyw nocny
   }
