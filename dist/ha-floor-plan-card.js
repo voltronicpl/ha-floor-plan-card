@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.5";
+const CARD_VERSION = "1.5.6";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -312,6 +312,13 @@ function buildThemed(config, key) {
     const entity = covers[ck];
     const tc = th.covers && th.covers[ck];
     if (!tc) continue;
+    if (ck === "brama" && tc.open && tc.open.box) {
+      // brama garażowa: rysowana brama segmentowa w otworze (podnosi się / opuszcza), napis i kropka stanu nad nią
+      badges.push({ kind: "slidegate", svg: "garage", label: "Brama garażowa", acc: "bramę garażową", actionKey: "garage_action",
+        entity: entity || null, name: def.name, pos: [tc.open.box[0], tc.open.box[1]], size: [tc.open.box[2], tc.open.box[3]],
+        openStates: openStatesFor(config, ck), alignLeft: portrait });
+      continue;
+    }
     if (!entity) {
       if (ck === "brama" && config.garage_action) badges.push({ kind: "gate", entity: null, name: def.name, pos: tc.icon, openStates: [], acc: "bramę garażową", actionKey: "garage_action" });
       continue;
@@ -540,6 +547,16 @@ const BADGE_CSS = `
 .fp-wk .fp-sg-leaf { transition: none; }
 .fp-wk.open .fp-sg-leaf { transform: none; }
 .fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
+.fp-sg.fp-gd { display: block; }
+.fp-gd svg { width: 100%; height: 100%; filter: none; }
+.fp-gd-door { transition: transform 2.2s cubic-bezier(0.45, 0, 0.25, 1); }
+.fp-gd.open .fp-gd-door { transform: translateY(-70px); }
+.fp-gd.pressing .fp-gd-door { transition: transform var(--fp-hold, 1s) ease-out; transform: translateY(-9px); }
+.fp-gd.open.pressing .fp-gd-door { transform: translateY(-61px); }
+.fp-gd.anim .fp-gd-door { transition: transform 14s linear; }
+.fp-gd .fp-sg-label { position: absolute; left: 50%; bottom: 100%; margin: 0 0 calc(var(--fp-s) * 0.25);
+  transform: translateX(-50%); }
+.fp-gd.fp-gd-left .fp-sg-label { left: 0; transform: none; }
 .fp-cam { position: absolute; pointer-events: auto; cursor: pointer; box-sizing: border-box;
   border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
   background: #0b0f15; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
@@ -596,6 +613,47 @@ function slideGateSvg(uid) {
   <ellipse cx="${P(60, 0).split(",")[0]}" cy="${(+P(60, 0).split(",")[1] + 4).toFixed(1)}" rx="135" ry="9" fill="url(#sh${uid})" />
   <g transform="matrix(1 ${K} 0 1 0 0)">${leaf}</g>
   ${post(0)}${post(134)}
+</svg>`;
+}
+
+// Brama garażowa segmentowa w otworze: wnętrze garażu (ciepłe światło, posadzka) i panele, które jadą w górę.
+function garageDoorSvg(uid) {
+  let panels = "";
+  for (let i = 0; i < 4; i++) {
+    const y = 4 + i * 17.75;
+    panels += `<rect x="0" y="${y}" width="200" height="17.75" fill="url(#gp${uid})"/>
+      <rect x="0" y="${y + 5.6}" width="200" height="0.9" fill="#1a1714" opacity=".75"/>
+      <rect x="0" y="${y + 6.5}" width="200" height="0.5" fill="#6d655c" opacity=".55"/>
+      <rect x="0" y="${y + 11.6}" width="200" height="0.9" fill="#1a1714" opacity=".75"/>
+      <rect x="0" y="${y + 12.5}" width="200" height="0.5" fill="#6d655c" opacity=".55"/>
+      <rect x="0" y="${y + 16.95}" width="200" height="0.8" fill="#0e0c0a"/>
+      <rect x="0" y="${y}" width="200" height="0.6" fill="#8a8178" opacity=".6"/>`;
+  }
+  return `<svg viewBox="0 0 200 75" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <clipPath id="gc${uid}"><rect x="0" y="0" width="200" height="75"/></clipPath>
+    <linearGradient id="gi${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a3622"/><stop offset=".45" stop-color="#7a5a38"/><stop offset="1" stop-color="#c79a62"/></linearGradient>
+    <radialGradient id="gl${uid}" cx=".5" cy=".05" r=".75"><stop offset="0" stop-color="#ffe3ad" stop-opacity=".95"/>
+      <stop offset=".55" stop-color="#ffbf6b" stop-opacity=".35"/><stop offset="1" stop-color="#ffbf6b" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gp${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4b443d"/><stop offset=".5" stop-color="#37312c"/><stop offset="1" stop-color="#2a2521"/></linearGradient>
+    <linearGradient id="gs${uid}" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".45"/>
+      <stop offset=".12" stop-color="#000" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient>
+  </defs>
+  <g clip-path="url(#gc${uid})">
+    <rect x="0" y="0" width="200" height="75" fill="url(#gi${uid})"/>
+    <rect x="0" y="0" width="200" height="75" fill="url(#gl${uid})"/>
+    <rect x="70" y="5" width="60" height="2.2" rx="1" fill="#fff4d6"/>
+    <polygon points="0,75 30,48 170,48 200,75" fill="#d9b07a" opacity=".35"/>
+    <rect x="0" y="0" width="200" height="75" fill="url(#gs${uid})"/>
+    <g class="fp-gd-door">${panels}
+      <rect x="0" y="74" width="200" height="1.6" fill="#0b0a09"/>
+      <rect x="92" y="62" width="16" height="2.2" rx="1" fill="#8d857c"/>
+    </g>
+    <rect x="0" y="0" width="200" height="4.2" fill="#1d1a17"/>
+    <rect x="0" y="4.2" width="200" height="0.7" fill="#000" opacity=".5"/>
+  </g>
 </svg>`;
 }
 
@@ -1110,11 +1168,13 @@ class HaFloorPlanCard extends HTMLElement {
       el.style.left = `${b.pos[0]}%`;
       el.style.top = `${b.pos[1]}%`;
       if (b.kind === "slidegate") {
-        el.className = b.svg === "wicket" ? "fp-sg fp-wk" : "fp-sg";
+        el.className = b.svg === "wicket" ? "fp-sg fp-wk" : b.svg === "garage" ? "fp-sg fp-gd" : "fp-sg";
         el.style.width = `${b.size[0]}%`;
+        if (b.size[1]) el.style.height = `${b.size[1]}%`;
+        if (b.alignLeft) el.classList.add("fp-gd-left"); // w pionie napis od lewej krawędzi bramy (nie wychodzi za ekran)
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
         const uid = Math.random().toString(36).slice(2, 7);
-        el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
+        el.innerHTML = `${b.svg === "wicket" ? wicketSvg(uid) : b.svg === "garage" ? garageDoorSvg(uid) : slideGateSvg(uid)}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
         this._bindGate(el, b);
       } else if (b.kind === "gate") {
         el.className = "fp-gate";
@@ -1174,7 +1234,7 @@ class HaFloorPlanCard extends HTMLElement {
         b.el.classList.toggle("moving", moving);
         b.el.classList.toggle("na", !b.entity || !st || sv === "unavailable");
         const L = b.label || "Brama";
-        const fem = L === "Brama" || L === "Furtka";
+        const fem = L.startsWith("Brama") || L === "Furtka";
         const txt = !b.entity ? `${L} – brak encji` : !st ? `${L} – nie ma takiej encji` : sv === "unavailable" ? `${L} – brak danych`
           : moving ? `${L} w ruchu` : open ? `${L} ${fem ? "otwarta" : "otwarte"}` : `${L} ${fem ? "zamknięta" : "zamknięte"}`;
         const span = b.el.querySelector(".fp-sg-label span");

@@ -122,6 +122,8 @@ Od 1.5.4 są **dwie osobne bramy**, każda z własną encją stanu i otwierania:
 - **Brama garażowa** (na planie, w garażu): `covers.brama`, `open_states.brama`, `garage_action`.
 - **Brama wjazdowa** (suwana, przy kamerze „przód”): `covers.brama_wjazdowa`, `open_states.brama_wjazdowa`, `gate_action`.
 
+Brama garażowa jest narysowana w otworze garażu jako brama segmentowa: otwarta = panele u góry i widać oświetlone wnętrze, zamknięta = panele zakrywają otwór. Nad nią napis z kropką stanu.
+
 Po przytrzymaniu skrzydło bramy lekko rusza, a po „Tak” brama powoli jedzie (ok. 14 s) z napisem „Brama w ruchu”, aż czujnik potwierdzi stan. Gdy czujnik nic nie zmieni w 25 s, rysunek wraca do prawdziwego stanu.
 
 W edytorze każde pole encji ma natywny wybór z listy HA oraz pole do ręcznego wpisania `entity_id` (zapis po Enter, wyjściu z pola albo chwilę po wpisaniu).
