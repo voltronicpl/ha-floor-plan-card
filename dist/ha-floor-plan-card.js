@@ -15,13 +15,14 @@
  * variant: 1|2|3        (opcjonalnie; bez tego warianty zmieniają się codziennie)
  * light_icons: true      (domyślnie; false = sama poświata bez ikon)
  * open_states: { brama: "open", drzwi1: "on" }  (stan oznaczający otwarte)
+ * slide_gate: true      (rysunek bramy suwanej przy kamerze „przód”; false = ukryj)
  * gate_action: switch.sterownik_bramy  (co wywołać po „Tak”), gate_hold_ms: 1000
  * cameras: { przod, wejscie, tyl }   (encje camera.*, false = ukryj)
  * show_empty_temp: false (true = „–” w pokojach bez czujnika temperatury)
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.5.1";
+const CARD_VERSION = "1.5.2";
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -355,6 +356,7 @@ function buildThemed(config, key) {
     return [w, h];
   };
   const cams = { ...DEFAULT_CAMERAS, ...(config.cameras || {}) };
+  const camRects = {};
   for (const [camKey, def] of Object.entries(CAMERAS)) {
     const entity = cams[camKey];
     if (!entity) continue;
@@ -375,6 +377,21 @@ function buildThemed(config, key) {
       rect = [l, houseBottom, w, h];
     }
     badges.push({ kind: "camera", entity, name: def.name, pos: [rect[0], rect[1]], size: [rect[2], rect[3]] });
+    camRects[camKey] = rect;
+  }
+
+  // brama suwana przy kamerze „przód”: obok niej (poziom) albo pod nią (pion)
+  const gateEntity = covers.brama || null;
+  if ((gateEntity || config.gate_action) && config.slide_gate !== false) {
+    const cr = camRects.przod;
+    const gw = portrait ? 48.5 : 15;
+    let gl;
+    let gt;
+    if (cr && portrait) { gl = cr[0]; gt = cr[1] + cr[3] + 1; }
+    else if (cr) { gl = Math.min(cr[0] + cr[2] + 0.8, 99.5 - gw); gt = houseBottom + 1.5; }
+    else { gl = 1; gt = houseBottom + 1.5; }
+    badges.push({ kind: "slidegate", entity: gateEntity, name: "Brama wjazdowa", pos: [gl, gt], size: [gw],
+      openStates: openStatesFor(config, "brama") });
   }
 
   // większe strefy pod spodem, mniejsze na wierzchu (np. warsztat wewnątrz prostokąta salonu)
@@ -464,6 +481,25 @@ const BADGE_CSS = `
   font: 600 15px/1 inherit; }
 .fp-no { background: rgba(127, 127, 127, 0.25); color: inherit; }
 .fp-yes { background: #e0533f; color: #fff; }
+.fp-sg { position: absolute; pointer-events: auto; cursor: pointer; user-select: none; -webkit-user-select: none;
+  touch-action: none; -webkit-touch-callout: none; display: flex; flex-direction: column; align-items: center; }
+.fp-sg svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45)); }
+.fp-sg-leaf { transition: transform 2.2s cubic-bezier(0.45, 0, 0.25, 1); }
+.fp-sg.open .fp-sg-leaf { transform: translateX(-120px); }
+.fp-sg-lamp { opacity: 0.35; transition: opacity 0.4s ease; }
+.fp-sg.moving .fp-sg-lamp { animation: fp-blink 0.8s steps(2, start) infinite; opacity: 1; fill: #ffa53a; }
+@keyframes fp-blink { to { visibility: hidden; } }
+.fp-sg-label { margin-top: 2px; display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: calc(var(--fp-s) * 0.1) calc(var(--fp-s) * 0.34); gap: calc(var(--fp-s) * 0.18); border-radius: 999px;
+  background: rgba(18, 20, 26, 0.75); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  font: 700 calc(var(--fp-s) * 0.44) / 1.25 var(--paper-font-body1_-_font-family, system-ui, sans-serif); }
+.fp-sg-label i { flex: none; width: 0.85em; height: 0.85em; border-radius: 50%; background: #3ecf6e;
+  box-shadow: 0 0 8px 1px #3ecf6e; }
+.fp-sg.open .fp-sg-label i { background: #ff4d3a; box-shadow: 0 0 8px 1px #ff4d3a; }
+.fp-sg.moving .fp-sg-label i { background: #ffb347; box-shadow: 0 0 8px 1px #ffb347; }
+.fp-sg.na { opacity: 0.6; }
+.fp-sg .fp-hold { bottom: -3px; border-radius: 2px; }
 .fp-cam { position: absolute; pointer-events: auto; cursor: pointer; box-sizing: border-box;
   border-radius: calc(var(--fp-s) * 0.22); overflow: hidden;
   background: #0b0f15; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
@@ -477,6 +513,53 @@ const BADGE_CSS = `
 .fp-cam:hover { box-shadow: 0 0 0 2px rgba(255, 200, 120, 0.8), 0 4px 14px rgba(0, 0, 0, 0.55); }
 .fp-temp.fp-below { transform: translate(-50%, calc(var(--fp-s) * 0.62)); }
 `;
+
+// ==== BRAMA SUWANA (rysunek SVG w stylu planu, bez bibliotek) ====
+function slideGateSvg(uid) {
+  const K = 0; // pochylenie płaszczyzny frontu
+  const P = (x, y) => `${x.toFixed(1)},${(y + K * x).toFixed(1)}`;
+  const D = [5, -8]; // wektor głębokości
+  const poly = (pts, fill, extra = "") => `<polygon points="${pts.map(([x, y]) => P(x, y)).join(" ")}" fill="${fill}" ${extra}/>`;
+  const post = (x0) => {
+    const w = 12, h = 74;
+    const f = [[x0, 0], [x0 + w, 0], [x0 + w, -h], [x0, -h]];
+    const g = (pt) => { const [x, y] = pt; return `${(x + D[0]).toFixed(1)},${(y + K * x + D[1]).toFixed(1)}`; };
+    const raw = (pt) => P(pt[0], pt[1]);
+    const side = `<polygon points="${raw([x0 + w, 0])} ${g([x0 + w, 0])} ${g([x0 + w, -h])} ${raw([x0 + w, -h])}" fill="url(#ps${uid})"/>`;
+    const top = `<polygon points="${raw([x0, -h])} ${raw([x0 + w, -h])} ${g([x0 + w, -h])} ${g([x0, -h])}" fill="#c9c3b8"/>`;
+    const cap = `<polygon points="${raw([x0 - 2, -h])} ${raw([x0 + w + 2, -h])} ${raw([x0 + w + 2, -h - 4])} ${raw([x0 - 2, -h - 4])}" fill="#8f897f"/>`;
+    const lamp = `<circle cx="${P(x0 + w / 2, -h - 8).split(",")[0]}" cy="${P(x0 + w / 2, -h - 8).split(",")[1]}" r="2.6" fill="#ffd27a" class="fp-sg-lamp"/>`;
+    return `${side}${poly(f, `url(#pf${uid})`)}${top}${cap}${lamp}`;
+  };
+  // skrzydło bramy w lokalnych współrzędnych frontu (przesuwane klasą .open)
+  const leafX0 = 12, leafW = 122, top = -54, bot = -8;
+  let slats = "";
+  for (let i = 1; i < 13; i++) {
+    const x = leafX0 + (leafW * i) / 13;
+    slats += `<rect x="${x - 1.6}" y="${top + 4}" width="3.2" height="${bot - top - 8}" fill="url(#sl${uid})"/>`;
+  }
+  const leaf = `<g class="fp-sg-leaf">
+    <rect x="${leafX0}" y="${top}" width="${leafW}" height="${bot - top}" rx="1.5" fill="none" stroke="url(#fr${uid})" stroke-width="4"/>
+    <rect x="${leafX0}" y="${(top + bot) / 2 - 1.5}" width="${leafW}" height="3" fill="url(#fr${uid})"/>
+    ${slats}
+    <circle cx="${leafX0 + 14}" cy="${bot + 3}" r="3.2" fill="#2a2d31" stroke="#6b7077" stroke-width="1"/>
+    <circle cx="${leafX0 + leafW - 14}" cy="${bot + 3}" r="3.2" fill="#2a2d31" stroke="#6b7077" stroke-width="1"/>
+  </g>`;
+  return `<svg viewBox="-125 -92 290 106" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <linearGradient id="pf${uid}" x1="0" x2="1"><stop offset="0" stop-color="#b7b0a4"/><stop offset="1" stop-color="#d8d2c6"/></linearGradient>
+    <linearGradient id="ps${uid}" x1="0" x2="1"><stop offset="0" stop-color="#8c867b"/><stop offset="1" stop-color="#6f6a61"/></linearGradient>
+    <linearGradient id="fr${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d636b"/><stop offset=".5" stop-color="#3a3f45"/><stop offset="1" stop-color="#25292d"/></linearGradient>
+    <linearGradient id="sl${uid}" x1="0" x2="1"><stop offset="0" stop-color="#2b2f34"/><stop offset=".45" stop-color="#6a7079"/><stop offset="1" stop-color="#2b2f34"/></linearGradient>
+    <radialGradient id="sh${uid}" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="${P(60, 0).split(",")[0]}" cy="${(+P(60, 0).split(",")[1] + 4).toFixed(1)}" rx="135" ry="9" fill="url(#sh${uid})" />
+  <polygon points="${P(-125, 2)} ${P(150, 2)} ${P(150, 6)} ${P(-125, 6)}" fill="#55585c"/>
+  <polygon points="${P(-125, 0)} ${P(150, 0)} ${P(150, 2)} ${P(-125, 2)}" fill="#9aa0a6"/>
+  <g transform="matrix(1 ${K} 0 1 0 0)">${leaf}</g>
+  ${post(0)}${post(134)}
+</svg>`;
+}
 
 // ==== EDYTOR WIZUALNY ====
 const EDITOR_ROOMS = Object.keys(ROOMS);
@@ -892,7 +975,13 @@ class HaFloorPlanCard extends HTMLElement {
       const el = document.createElement("div");
       el.style.left = `${b.pos[0]}%`;
       el.style.top = `${b.pos[1]}%`;
-      if (b.kind === "gate") {
+      if (b.kind === "slidegate") {
+        el.className = "fp-sg";
+        el.style.width = `${b.size[0]}%`;
+        el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
+        el.innerHTML = `${slideGateSvg(Math.random().toString(36).slice(2, 7))}<div class="fp-sg-label"><i></i><span></span></div><div class="fp-hold"></div>`;
+        this._bindGate(el, b);
+      } else if (b.kind === "gate") {
         el.className = "fp-gate";
         el.title = `${b.name} – przytrzymaj, żeby otworzyć`;
         el.innerHTML = `<ha-icon icon="mdi:garage"></ha-icon><div class="fp-hold"></div>`;
@@ -938,6 +1027,20 @@ class HaFloorPlanCard extends HTMLElement {
     const now = Date.now();
     for (const b of this._badges) {
       const st = b.entity ? states[b.entity] : null;
+      if (b.kind === "slidegate") {
+        const sv = st ? String(st.state).toLowerCase() : "";
+        const open = !!st && (b.openStates || DEFAULT_OPEN).includes(sv);
+        const moving = sv === "opening" || sv === "closing";
+        b.el.classList.toggle("open", open || sv === "opening");
+        b.el.classList.toggle("moving", moving);
+        b.el.classList.toggle("na", !!b.entity && (!st || sv === "unavailable"));
+        const txt = !b.entity ? "Brama" : !st || sv === "unavailable" ? "Brama – brak danych"
+          : moving ? "Brama w ruchu" : open ? "Brama otwarta" : "Brama zamknięta";
+        const span = b.el.querySelector(".fp-sg-label span");
+        if (span.textContent !== txt) span.textContent = txt;
+        b._open = open;
+        continue;
+      }
       if (b.kind === "gate") {
         const open = !!st && (b.openStates || DEFAULT_OPEN).includes(String(st.state).toLowerCase());
         b.el.classList.toggle("open", open);

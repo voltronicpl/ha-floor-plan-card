@@ -99,6 +99,14 @@ Kamery przylegają do domu: przód i wejście dotykają dolnej ściany i są roz
 Zmienisz je w edytorze (sekcja „Kamery”) albo w YAML-u: `cameras: { przod: camera.x, tyl: false }`.
 Rozmiar ustawia `camera_size` (w % szerokości mapy, domyślnie 15, a w pionie 30).
 
+## Brama suwana na planie
+
+Obok kamery „przód” (na telefonie pod nią) jest rysunek **bramy suwanej** w stylu planu: murowane słupki z lampkami,
+antracytowe skrzydło na kółkach i szyna. Zamknięta brama ma skrzydło między słupkami i zieloną kropkę „Brama zamknięta”.
+Otwarta ma skrzydło odjechane za słupek (płynnie, w 2 s) i czerwoną kropkę „Brama otwarta”. W ruchu lampki migają,
+a napis brzmi „Brama w ruchu”. Stan bierze się z encji bramy z edytora, tak jak niżej. Przytrzymanie rysunku
+otwiera bramę z potwierdzeniem, a krótki klik pokazuje szczegóły. Ukryjesz go opcją `slide_gate: false`.
+
 ## Brama: stan i otwieranie
 
 - **Stan bramy:** w edytorze wybierz dowolną encję (`binary_sensor`, `cover`, `sensor`, `switch`…)
