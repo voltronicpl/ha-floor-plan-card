@@ -246,6 +246,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `gate_in_fence` | Brama wjazdowa (naprzeciwko garażu, długie skrzydło) i furtka (naprzeciwko drzwi głównych) stoją w płocie przy dolnej krawędzi; kamera „przód” za bramą, „wejście” w prawym rogu. `false` = stare ułożenie. |
 | `fence_y` | Linia ziemi płotu w % wysokości obrazka (domyślnie 99,3). |
 | `fence_gap` | `false` = nie zamalowuj płotu z tła pod bramą i furtką (domyślnie zamalowany śniegiem/trawą). |
+| `weather_entity` | Encja pogody `weather.*`: deszcz, ulewa, śnieg, deszcz ze śniegiem, grad i burza (błyski, ciemniej) widać na działce dookoła domu. Puste = pierwsza encja weather z HA. Też w edytorze. |
+| `weather_effects` | `false` = bez opadów na mapie. |
 | `corner_card_grow` | O ile % wysokości mapy karta w rogu może zejść na dach (domyślnie 4). Większa liczba = większa karta. |
 | `corner_card_below` | `true` = w pionie (telefon) karta pod mapą zamiast małej w prawym górnym rogu. |
 | `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |

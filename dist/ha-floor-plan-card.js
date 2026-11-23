@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.8";
+const CARD_VERSION = "1.6.9";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -528,6 +528,8 @@ function buildThemed(config, key) {
     layers,
     badges,
     // łata tła w luce płotu: od górnej krawędzi płotu do dołu obrazka, kopiowana z pasa nad płotem
+    // obrys domu (% obrazka): tu nie pada (dach), opady tylko na działce dookoła
+    house: [houseLeft, houseTop, houseRight, houseBottom],
     fenceGaps: config.fence_gap === false || !fenceGaps.length ? [] : fenceGaps.map(([x0, x1]) => {
       const top = Math.max(0, fenceY - (postPx / th.h * 100) * 1.12);
       return { x0, x1, top, src: 1.2 }; // src = wysokość pasa nad płotem rozciąganego w dół (%)
@@ -995,6 +997,9 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "cover.drzwi2", label: "Drzwi wejściowe 2 (główne) – stan", value: covers.drzwi2 || "", entity: true },
         { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
       ] },
+      { group: "Pogoda (opady na działce)", icon: "mdi:weather-pouring", fields: [
+        { id: "weather_entity", label: "Encja pogody weather.* (deszcz, śnieg, burza widać na działce; puste = pierwsza z HA)", value: c.weather_entity || "", entity: true },
+      ] },
       { group: "Kamery", icon: "mdi:cctv", fields: Object.keys(CAMERAS).map((k) => (
         { id: `camera.${k}`, label: CAMERAS[k].name, value: cams[k] || "", entity: true })) },
     ];
@@ -1021,6 +1026,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
     } else if (id === "gate_action") c.gate_action = v || undefined;
     else if (id === "garage_action") c.garage_action = v || undefined;
     else if (id === "wicket_action") c.wicket_action = v || undefined;
+    else if (id === "weather_entity") c.weather_entity = v || undefined;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
     this._emit(c);
   }
@@ -1465,6 +1471,7 @@ class HaFloorPlanCard extends HTMLElement {
     if (this._onResize) window.removeEventListener("resize", this._onResize);
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
     if (this._camTimer) { clearInterval(this._camTimer); this._camTimer = null; }
+    if (this._wx && this._wx.raf) { cancelAnimationFrame(this._wx.raf); this._wx.raf = 0; this._wx.kind = null; }
   }
 
   // Przebudowuje kartę tylko, gdy zmienił się motyw.
@@ -1499,7 +1506,8 @@ class HaFloorPlanCard extends HTMLElement {
     let badges = [];
     let corner = null;
     let fenceGaps = [];
-    if (key) ({ cfg, layers, badges, corner, fenceGaps } = buildThemed(this._config, key));
+    let house = null;
+    if (key) ({ cfg, layers, badges, corner, fenceGaps, house } = buildThemed(this._config, key));
     else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
@@ -1643,6 +1651,22 @@ class HaFloorPlanCard extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = BADGE_CSS;
     wrap.appendChild(style);
+    // pogoda: deszcz / śnieg / grad / burza na działce (nad tłem, pod ikonkami), z encji weather.*
+    this._stopWeather();
+    if (this._config.weather_effects !== false && key) {
+      const wx = document.createElement("div");
+      wx.className = "fp-wx";
+      Object.assign(wx.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" });
+      const dark = document.createElement("div");
+      Object.assign(dark.style, { position: "absolute", inset: "0", background: "#0b1020", opacity: "0", transition: "opacity 2s ease" });
+      const canvas = document.createElement("canvas");
+      Object.assign(canvas.style, { position: "absolute", inset: "0", width: "100%", height: "100%" });
+      const flash = document.createElement("div");
+      Object.assign(flash.style, { position: "absolute", inset: "0", background: "#dfe8ff", opacity: "0", mixBlendMode: "screen" });
+      wx.append(dark, canvas, flash);
+      wrap.appendChild(wx);
+      this._wx = { canvas, dark, flash, house, kind: null, parts: [], raf: 0, nextFlash: 0 };
+    }
     const blayer = document.createElement("div");
     blayer.className = "fp-badges";
     this._badges = badges.map((b) => {
@@ -1811,7 +1835,132 @@ class HaFloorPlanCard extends HTMLElement {
     return null;
   }
 
+  // ---- POGODA: opady na działce ----
+  _weatherKind() {
+    const h = this._hass;
+    if (!h || !h.states) return null;
+    let id = this._config.weather_entity;
+    if (!id) id = Object.keys(h.states).find((k) => k.startsWith("weather."));
+    const st = id && h.states[id];
+    const c = st ? String(st.state).toLowerCase() : "";
+    if (c === "lightning" || c === "lightning-rainy") return "storm";
+    if (c === "pouring") return "pouring";
+    if (c === "rainy") return "rain";
+    if (c === "snowy") return "snow";
+    if (c === "snowy-rainy") return "sleet";
+    if (c === "hail") return "hail";
+    return null;
+  }
+
+  _stopWeather() {
+    if (this._wx && this._wx.raf) cancelAnimationFrame(this._wx.raf);
+    this._wx = null;
+  }
+
+  _updateWeather() {
+    const wx = this._wx;
+    if (!wx) return;
+    const kind = this._weatherKind();
+    if (kind === wx.kind) return;
+    wx.kind = kind;
+    wx.parts = [];
+    const darkness = { storm: 0.32, pouring: 0.22, rain: 0.14, hail: 0.18, sleet: 0.12, snow: 0.06 };
+    wx.dark.style.opacity = String(kind ? darkness[kind] : 0);
+    if (!kind) {
+      if (wx.raf) cancelAnimationFrame(wx.raf);
+      wx.raf = 0;
+      const ctx = wx.canvas.getContext("2d");
+      ctx && ctx.clearRect(0, 0, wx.canvas.width, wx.canvas.height);
+      return;
+    }
+    if (!wx.raf) {
+      let last = performance.now();
+      const tick = (now) => {
+        if (this._wx !== wx || !wx.kind) return;
+        wx.raf = requestAnimationFrame(tick);
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (document.hidden) return;
+        this._drawWeather(wx, dt, now);
+      };
+      wx.raf = requestAnimationFrame(tick);
+    }
+  }
+
+  _drawWeather(wx, dt, now) {
+    const cv = wx.canvas;
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    const W = Math.round(cv.clientWidth * dpr);
+    const H = Math.round(cv.clientHeight * dpr);
+    if (!W || !H) return;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; wx.parts = []; }
+    const ctx = cv.getContext("2d");
+    const k = wx.kind;
+    const snowy = k === "snow";
+    const s = Math.min(1.3, Math.max(0.75, W / dpr / 1000)); // skala do szerokości mapy (na telefonie nie za drobno)
+    const dens = { storm: 1.1, pouring: 1.3, rain: 0.7, hail: 0.5, sleet: 0.9, snow: 1.3 }[k] || 0.6;
+    const want = Math.round(Math.min(900, (W * H) / (dpr * dpr) / 1400 * dens));
+    const make = (top) => {
+      const flake = snowy || (k === "sleet" && Math.random() < 0.5);
+      const z = 0.5 + Math.random() * 0.8; // głębia: bliżej = większe i szybsze
+      return { x: Math.random() * W * 1.2 - W * 0.1, y: top ? -Math.random() * H * 0.2 : Math.random() * H, z, flake,
+        hail: k === "hail", ph: Math.random() * 6.28 };
+    };
+    while (wx.parts.length < want) wx.parts.push(make(false));
+    if (wx.parts.length > want) wx.parts.length = want;
+    ctx.clearRect(0, 0, W, H);
+    const wind = (k === "storm" ? 0.32 : k === "pouring" ? 0.18 : 0.1);
+    ctx.lineCap = "round";
+    for (const p of wx.parts) {
+      if (p.flake) {
+        const v = 55 * p.z * s * dpr;
+        p.y += v * dt;
+        p.x += Math.sin(now / 900 + p.ph) * 12 * s * dpr * dt + v * 0.15 * dt;
+        ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.35 * p.z / 1.3})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (1.2 + 1.6 * p.z) * s * dpr, 0, 6.283);
+        ctx.fill();
+      } else if (p.hail) {
+        const v = 900 * p.z * s * dpr;
+        p.y += v * dt;
+        p.x += v * 0.06 * dt;
+        ctx.fillStyle = "rgba(235,242,255,0.85)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (1.1 + p.z) * s * dpr, 0, 6.283);
+        ctx.fill();
+      } else {
+        const v = (k === "pouring" || k === "storm" ? 1300 : 1000) * p.z * s * dpr;
+        p.y += v * dt;
+        p.x += v * wind * dt;
+        const len = (14 + 16 * p.z) * s * dpr;
+        ctx.strokeStyle = `rgba(205,220,255,${0.3 + 0.35 * p.z / 1.3})`;
+        ctx.lineWidth = (0.7 + 0.8 * p.z) * s * dpr;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - len * wind, p.y - len);
+        ctx.stroke();
+      }
+      if (p.y > H + 20 || p.x > W + 40) Object.assign(p, make(true));
+    }
+    // nad domem nie pada (dach): wycięcie obrysu domu
+    if (wx.house) {
+      const [l, t, r, b] = wx.house;
+      ctx.clearRect(l / 100 * W, t / 100 * H, (r - l) / 100 * W, (b - t) / 100 * H);
+    }
+    // burza: błyski co kilka sekund (podwójne mignięcie)
+    if (k === "storm") {
+      if (!wx.nextFlash) wx.nextFlash = now + 2000 + Math.random() * 5000;
+      if (now >= wx.nextFlash) {
+        wx.nextFlash = now + 4000 + Math.random() * 8000;
+        const f = wx.flash;
+        const seq = [[0, 0.4], [90, 0.08], [170, 0.55], [320, 0]];
+        for (const [t, o] of seq) setTimeout(() => { f.style.transition = t === 320 ? "opacity 0.9s ease-out" : "none"; f.style.opacity = String(o); }, t);
+      }
+    }
+  }
+
   _updateLayers() {
+    this._updateWeather();
     if (this._layers) {
       for (const l of this._layers) {
         const op = layerOn(l, this._hass) ? "1" : "0";
