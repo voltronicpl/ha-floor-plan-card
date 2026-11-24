@@ -259,6 +259,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `fullscreen` | `true` (domyślnie): bez ramki, mapa na całe okno pod paskiem HA (cała szerokość i wysokość), bez przewijania. `false`: zwykła karta. |
 | `fullscreen_zoom` | Ile razy mapa może być większa niż ekran, żeby zmniejszyć rozmyte pasy (domyślnie 1, np. 1.1 = lekko ucięte brzegi). |
 | `fullscreen_fit` | `stretch` (domyślnie): obraz rozciągnięty na cały ekran, ikonki i bramy się nie zniekształcają. `contain`: cała mapa w proporcjach, po bokach rozmyte tło. |
+| `pinch_zoom` | `true` (domyślnie): na telefonie przybliżanie dwoma palcami (do 4×), przesuwanie jednym palcem po przybliżeniu, podwójne stuknięcie wraca do całej mapy. `false` = wyłączone. |
+| `pinch_zoom_max` | Największe przybliżenie (domyślnie 4). |
 | `image` | Własne tło (domyślnie `plan_domu_noc.png`). |
 | `rooms.<pokój>.light` | Encja światła: włączone = pokój podświetlony. |
 | `rooms.<pokój>.temperature` | Sensor temperatury pod ikoną. |

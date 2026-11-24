@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.6.9";
+const CARD_VERSION = "1.7.0";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -1541,8 +1541,8 @@ class HaFloorPlanCard extends HTMLElement {
         filter: "blur(40px) brightness(0.6) saturate(0.8)", pointerEvents: "none" });
       stage.appendChild(blur);
       if (this._config.fullscreen_fit === "contain") {
-        Object.assign(wrap.style, { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
-          width: `min(max(100%, ${H} * ${aspect}), ${zoom} * min(100%, ${H} * ${aspect}))`, margin: "0" });
+        Object.assign(wrap.style, { position: "absolute", inset: "0", margin: "auto", aspectRatio: String(aspect), height: "auto",
+          width: `min(max(100%, ${H} * ${aspect}), ${zoom} * min(100%, ${H} * ${aspect}))` });
       } else {
         // domyślnie (fullscreen_fit: stretch): mapa na całą szerokość i wysokość ekranu. Rozciągany jest tylko obraz
         // (w pionie, o ile trzeba), a ikonki, bramy, kamery i EMS stoją w tych samych miejscach i się nie zniekształcają.
@@ -1737,6 +1737,7 @@ class HaFloorPlanCard extends HTMLElement {
     const cornerBelow = this._addCornerCard(helpers, wrap, corner);
 
     if (stage) { stage.appendChild(wrap); this.appendChild(stage); } else this.appendChild(wrap);
+    this._initZoom(stage || this, wrap);
     if (cornerBelow) this.appendChild(cornerBelow);
     this._card = card;
     this._updateLayers();
@@ -2062,7 +2063,8 @@ class HaFloorPlanCard extends HTMLElement {
     el.addEventListener("pointerdown", () => {
       held = false;
       el.classList.add("pressing");
-      timer = setTimeout(() => { held = true; cancel(); this._confirmGate(b); }, holdMs);
+      const seq = this._gestureSeq || 0;
+      timer = setTimeout(() => { if ((this._gestureSeq || 0) !== seq) { cancel(); return; } held = true; cancel(); this._confirmGate(b); }, holdMs);
     });
     el.addEventListener("pointerup", () => { if (!held) cancel(); });
     el.addEventListener("pointerleave", cancel);
@@ -2096,7 +2098,9 @@ class HaFloorPlanCard extends HTMLElement {
     const yes = dlg.querySelector(".fp-yes");
     if (!canAct) yes.remove();
     const close = () => dlg.remove();
-    dlg.addEventListener("click", (ev) => { ev.stopPropagation(); if (ev.target === dlg) close(); });
+    // klik puszczonego palca zaraz po przytrzymaniu nie zamyka okienka
+    const openedAt = Date.now();
+    dlg.addEventListener("click", (ev) => { ev.stopPropagation(); if (ev.target === dlg && Date.now() - openedAt > 600) close(); });
     dlg.querySelector(".fp-no").addEventListener("click", close);
     yes.addEventListener("click", () => {
       close();
@@ -2120,8 +2124,13 @@ class HaFloorPlanCard extends HTMLElement {
   // okienko tuż nad przedmiotem (nie zasłania go); gdy u góry brak miejsca – pod nim; zawsze w granicach mapy
   _placeConfirm(wrap, box, target) {
     if (!box || !target) return;
-    const wr = wrap.getBoundingClientRect();
-    const tr = target.getBoundingClientRect();
+    const z = (this._zoom && this._zoom.z) || 1;
+    const r0 = wrap.getBoundingClientRect();
+    const t0 = target.getBoundingClientRect();
+    // współrzędne w jednostkach mapy (przy przybliżeniu palcami mapa jest powiększona)
+    const wr = { left: 0, top: 0, width: r0.width / z, height: r0.height / z, bottom: r0.height / z };
+    const tr = { left: (t0.left - r0.left) / z, top: (t0.top - r0.top) / z, width: t0.width / z, height: t0.height / z,
+      bottom: (t0.bottom - r0.top) / z };
     const bw = box.offsetWidth;
     const bh = box.offsetHeight;
     const gap = 12;
@@ -2137,6 +2146,96 @@ class HaFloorPlanCard extends HTMLElement {
     box.style.setProperty("--fp-arrow", `${Math.max(16, Math.min(bw - 16, cx - left))}px`);
   }
 
+  // Przybliżanie palcami (telefon): dwa palce = zoom, jeden palec po przybliżeniu = przesuwanie,
+  // podwójne stuknięcie = powrót. Przytrzymanie bram i klikanie ikonek działa jak wcześniej
+  // (gest anuluje przytrzymanie, a klik zaraz po przesunięciu jest ignorowany). pinch_zoom: false wyłącza.
+  _initZoom(box, wrap) {
+    if (this._config.pinch_zoom === false) { this._zoom = null; return; }
+    const zs = { z: 1, tx: 0, ty: 0 };
+    this._zoom = zs;
+    const maxZ = Number(this._config.pinch_zoom_max) || 4;
+    box.style.overflow = "hidden";
+    box.style.touchAction = this._config.fullscreen === false ? "pan-x pan-y" : "none";
+    wrap.style.transformOrigin = "0 0";
+    const pts = new Map();
+    let start = null;
+    let moved = false;
+    let lastTap = 0;
+    let lastTapXY = [0, 0];
+    let suppressUntil = 0;
+    const apply = (anim) => {
+      const W = wrap.offsetWidth;
+      const H = wrap.offsetHeight;
+      zs.z = Math.min(maxZ, Math.max(1, zs.z));
+      zs.tx = Math.min(0, Math.max(W - W * zs.z, zs.tx));
+      zs.ty = Math.min(0, Math.max(H - H * zs.z, zs.ty));
+      wrap.style.transition = anim ? "transform 0.25s ease" : "none";
+      wrap.style.transform = zs.z === 1 ? "" : `translate(${zs.tx}px, ${zs.ty}px) scale(${zs.z})`;
+    };
+    const local = (e) => { const r = box.getBoundingClientRect(); return [e.clientX - r.left - wrap.offsetLeft, e.clientY - r.top - wrap.offsetTop]; };
+    const begin = () => {
+      const a = [...pts.values()];
+      if (a.length >= 2) {
+        const [p, q] = a;
+        start = { pinch: true, d: Math.hypot(p[0] - q[0], p[1] - q[1]) || 1, mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2], z: zs.z, tx: zs.tx, ty: zs.ty };
+      } else if (a.length === 1) {
+        start = { pinch: false, p: a[0], tx: zs.tx, ty: zs.ty };
+      } else start = null;
+    };
+    box.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return;
+      pts.set(e.pointerId, local(e));
+      if (pts.size === 1) moved = false;
+      if (pts.size >= 2) { moved = true; this._gestureSeq = (this._gestureSeq || 0) + 1; }
+      begin();
+    }, true);
+    box.addEventListener("pointermove", (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, local(e));
+      if (!start) return;
+      if (start.pinch && pts.size >= 2) {
+        const [p, q] = [...pts.values()];
+        const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+        const z = Math.min(maxZ, Math.max(1, start.z * d / start.d));
+        // punkt mapy pod palcami zostaje pod palcami
+        const cx = (start.mid[0] - start.tx) / start.z;
+        const cy = (start.mid[1] - start.ty) / start.z;
+        zs.z = z; zs.tx = mid[0] - cx * z; zs.ty = mid[1] - cy * z;
+        apply(false);
+        e.preventDefault();
+      } else if (!start.pinch && zs.z > 1) {
+        const p = pts.get(e.pointerId);
+        const dx = p[0] - start.p[0];
+        const dy = p[1] - start.p[1];
+        if (!moved && Math.hypot(dx, dy) > 8) { moved = true; this._gestureSeq = (this._gestureSeq || 0) + 1; }
+        if (moved) { zs.tx = start.tx + dx; zs.ty = start.ty + dy; apply(false); e.preventDefault(); }
+      }
+    }, true);
+    const end = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      const p = pts.get(e.pointerId);
+      pts.delete(e.pointerId);
+      if (moved) suppressUntil = Date.now() + 350;
+      if (!pts.size) {
+        // podwójne stuknięcie (bez przesuwania) przy przybliżeniu = powrót do całej mapy
+        const now = Date.now();
+        if (!moved && e.type === "pointerup") {
+          if (zs.z > 1 && now - lastTap < 320 && Math.hypot(p[0] - lastTapXY[0], p[1] - lastTapXY[1]) < 30) {
+            zs.z = 1; zs.tx = 0; zs.ty = 0; apply(true);
+            suppressUntil = now + 350;
+            lastTap = 0;
+          } else { lastTap = now; lastTapXY = p; }
+        }
+        start = null;
+      } else begin();
+    };
+    box.addEventListener("pointerup", end, true);
+    box.addEventListener("pointercancel", end, true);
+    // klik zaraz po geście nie przełącza światła ani nie otwiera okna
+    box.addEventListener("click", (e) => { if (Date.now() < suppressUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
+  }
+
   // klik = przełącz (światło), przytrzymanie / klik w temperaturę = szczegóły encji
   _bindPress(el, entityId, infoOnly = false) {
     let timer = null;
@@ -2146,7 +2245,8 @@ class HaFloorPlanCard extends HTMLElement {
     }));
     el.addEventListener("pointerdown", () => {
       held = false;
-      timer = setTimeout(() => { held = true; moreInfo(); }, 500);
+      const seq = this._gestureSeq || 0;
+      timer = setTimeout(() => { if ((this._gestureSeq || 0) !== seq) return; held = true; moreInfo(); }, 500);
     });
     const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
     el.addEventListener("pointerleave", cancel);
