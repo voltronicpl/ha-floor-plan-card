@@ -248,6 +248,11 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `fence_gap` | `false` = nie zamalowuj płotu z tła pod bramą i furtką (domyślnie zamalowany śniegiem/trawą). |
 | `weather_entity` | Encja pogody `weather.*`: deszcz, ulewa, śnieg, deszcz ze śniegiem, grad i burza (błyski, ciemniej) widać na działce dookoła domu. Puste = pierwsza encja weather z HA. Też w edytorze. |
 | `weather_effects` | `false` = bez opadów na mapie. |
+| `alarm_entity` | Centrala alarmu (domyślnie `alarm_control_panel.ropam_strefa_1`). Uzbrojony: czerwona neonowa ramka wokół domu, laser biegnący dookoła i plakietka „ALARM WŁĄCZONY”. Rozbrojony: zielona plakietka „ALARM WYŁĄCZONY”. Klik w plakietkę = Uzbrój/Rozbrój z pytaniem „Na pewno?”, przytrzymanie = szczegóły. Uzbrajanie i opóźnienie są pomarańczowe, a wyzwolony alarm miga. `false` = bez alarmu. Też w edytorze. |
+| `alarm_violation_entity` | Naruszenie strefy (domyślnie `binary_sensor.ropam_strefa_1_naruszona`): przy `on` ramka i plakietka migają mocniej. |
+| `alarm_code` | Kod do uzbrajania/rozbrajania, jeśli centrala go wymaga. |
+| `alarm_arm_mode` | Tryb uzbrajania: `away` (domyślnie), `home`, `night`, `vacation`. |
+| `alarm` | `false` = alarm wyłączony na mapie. Obrys domu poprawisz w edytorze: „Obszary świateł”, pozycja „Obrys domu (alarm)”. |
 | `corner_card_grow` | O ile % wysokości mapy karta w rogu może zejść na dach (domyślnie 4). Większa liczba = większa karta. |
 | `corner_card_below` | `true` = w pionie (telefon) karta pod mapą zamiast małej w prawym górnym rogu. |
 | `corner_card_width` | Szerokość tej karty w px przed skalowaniem (domyślnie 520). Karta zajmuje miejsce od prawego górnego narożnika do dachu. |

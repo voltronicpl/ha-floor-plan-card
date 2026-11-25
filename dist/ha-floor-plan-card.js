@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -47,6 +47,32 @@ const polyCss = (pts) => `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(", "
 
 // Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
+// Alarm (Ropam): centrala i opcjonalny czujnik naruszenia strefy. alarm: false = bez alarmu na mapie.
+const DEFAULT_ALARM = "alarm_control_panel.ropam_strefa_1";
+const DEFAULT_ALARM_VIOL = "binary_sensor.ropam_strefa_1_naruszona";
+// Obrys domu dla alarmu: narysowany w edytorze (room_areas.<układ>._dom) albo domyślny z pól pokoi
+const HOUSE_KEY = "_dom";
+function houseBox(th) {
+  const rb = Object.values(th.rooms || {}).map((x) => x.light && x.light.box).filter(Boolean);
+  const cb = Object.values(th.covers || {}).map((x) => x.open && x.open.box).filter(Boolean);
+  if (!rb.length) return null;
+  const L = Math.min(...rb.map((b) => b[0]));
+  const R = Math.max(...rb.map((b) => b[0] + b[2]));
+  const T = Math.min(...rb.map((b) => b[1]));
+  const B = cb.length ? Math.max(...cb.map((b) => b[1] + b[3])) : Math.max(...rb.map((b) => b[1] + b[3])) + 5;
+  return [L, T, R, B];
+}
+function defaultHouseOutline(th) {
+  const hb = houseBox(th);
+  if (!hb) return null;
+  const [L, T, R, B] = hb;
+  const i = (R - L) * 0.035; // tylna ściana węższa (perspektywa)
+  const fw = (B - T) * 0.12; // przednia ściana (pion) na dole
+  return [[L + i, T + 0.3], [R - i, T + 0.3], [R + 0.4, B - fw], [R, B], [L, B], [L - 0.4, B - fw]];
+}
+function houseOutline(config, th) {
+  return roomPoly(config, th.orient, HOUSE_KEY) || defaultHouseOutline(th);
+}
 
 // Folder, z którego załadowano kartę (jak w EMS: new URL(..., import.meta.url)).
 // Dzięki temu obrazki działają pod każdym adresem HA (lokalnie, przez Nabu Casa, w aplikacji na telefonie).
@@ -530,6 +556,7 @@ function buildThemed(config, key) {
     // łata tła w luce płotu: od górnej krawędzi płotu do dołu obrazka, kopiowana z pasa nad płotem
     // obrys domu (% obrazka): tu nie pada (dach), opady tylko na działce dookoła
     house: [houseLeft, houseTop, houseRight, houseBottom],
+    outline: houseOutline(config, th),
     fenceGaps: config.fence_gap === false || !fenceGaps.length ? [] : fenceGaps.map(([x0, x1]) => {
       const top = Math.max(0, fenceY - (postPx / th.h * 100) * 1.12);
       return { x0, x1, top, src: 1.2 }; // src = wysokość pasa nad płotem rozciąganego w dół (%)
@@ -569,6 +596,58 @@ function resolveTheme(config, hass) {
   if (t !== "auto") return THEMES[t] ? (config.variant ? pickVariant(t, config.variant) : t) : null;
   return autoThemeKey(hass, config.variant, config.winter_from_nov15 !== false);
 }
+
+// ==== ALARM: neonowa ramka wokół domu, laser biegnący dookoła, plakietka uzbrojony / rozbrojony ====
+const ALARM_CSS = `
+.fp-al-ring { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.8s ease; }
+.fp-al-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fp-al-ring polygon, .fp-al-ring polyline { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.fp-al-glow { stroke: rgba(255, 30, 30, 0.45); filter: blur(4px); }
+.fp-al-line { stroke: #ff2a2a; filter: drop-shadow(0 0 3px #ff1a1a) drop-shadow(0 0 8px rgba(255, 0, 0, 0.8)); }
+.fp-al-dot { fill: #fff; filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 8px #ff2020); }
+.fp-al-head { stroke: #fff; stroke-dasharray: 18 982; filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px #ff3030);
+  animation: fp-al-run 7s linear infinite; }
+.fp-al-tail { stroke: rgba(255, 120, 120, 0.85); stroke-dasharray: 90 910; filter: blur(2px) drop-shadow(0 0 6px #ff2020);
+  animation: fp-al-run-tail 7s linear infinite; }
+@keyframes fp-al-run { from { stroke-dashoffset: -72; } to { stroke-dashoffset: -1072; } }
+@keyframes fp-al-run-tail { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -1000; } }
+.fp-al-ring.on { opacity: 1; }
+.fp-al-ring.alert { opacity: 1; animation: fp-al-blink 0.5s steps(2, jump-none) infinite; }
+.fp-al-ring.alert .fp-al-head, .fp-al-ring.alert .fp-al-tail { animation-duration: 2.5s; }
+.fp-al-ring.arming { opacity: 1; animation: fp-al-fade 1.4s ease-in-out infinite; }
+.fp-al-ring.arming .fp-al-line { stroke: #ffb020; filter: drop-shadow(0 0 6px #ff9a00); }
+.fp-al-ring.arming .fp-al-glow { stroke: rgba(255, 170, 0, 0.4); }
+.fp-al-ring.arming .fp-al-head, .fp-al-ring.arming .fp-al-tail { display: none; }
+@keyframes fp-al-blink { 0% { opacity: 1; } 100% { opacity: 0.25; } }
+@keyframes fp-al-fade { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.fp-al-plq { position: absolute; transform: translate(-50%, -100%); z-index: 2; pointer-events: auto; cursor: pointer;
+  display: flex; align-items: center; gap: calc(var(--fp-s) * 0.22); user-select: none; -webkit-user-select: none;
+  padding: calc(var(--fp-s) * 0.16) calc(var(--fp-s) * 0.36) calc(var(--fp-s) * 0.16) calc(var(--fp-s) * 0.2);
+  border-radius: calc(var(--fp-s) * 0.32); background: rgba(14, 6, 8, 0.86); --al: #ff2a2a; --al-txt: #ff3b3b;
+  border: 2px solid var(--al); box-shadow: 0 0 calc(var(--fp-s) * 0.25) var(--al), inset 0 0 calc(var(--fp-s) * 0.2) rgba(255, 40, 40, 0.35);
+  font-family: system-ui, sans-serif; color: #fff; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+.fp-al-plq.fp-al-pion { transform: translate(-50%, -50%); }
+.fp-al-shield { color: var(--al); width: calc(var(--fp-s) * 0.78); padding-right: calc(var(--fp-s) * 0.18);
+  border-right: 1px solid rgba(255, 255, 255, 0.18); filter: drop-shadow(0 0 5px var(--al)); }
+.fp-al-shield svg { display: block; width: 100%; height: auto; }
+.fp-al-txt { display: flex; flex-direction: column; line-height: 1.02; text-align: center; }
+.fp-al-txt b { font-size: calc(var(--fp-s) * 0.42); letter-spacing: 0.04em; font-weight: 800; }
+.fp-al-txt span { font-size: calc(var(--fp-s) * 0.5); font-weight: 900; color: var(--al-txt); text-shadow: 0 0 8px var(--al); }
+.fp-al-led { position: absolute; right: calc(var(--fp-s) * 0.14); top: calc(var(--fp-s) * 0.14); width: calc(var(--fp-s) * 0.17);
+  height: calc(var(--fp-s) * 0.17); border-radius: 50%; background: var(--al); box-shadow: 0 0 8px var(--al);
+  animation: fp-al-led 1.2s ease-in-out infinite; }
+@keyframes fp-al-led { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.25; transform: scale(0.7); } }
+.fp-al-plq.off { --al: #22c55e; --al-txt: #3ee07a; box-shadow: 0 0 calc(var(--fp-s) * 0.2) rgba(34, 197, 94, 0.8); background: rgba(6, 14, 9, 0.86); }
+.fp-al-plq.off .fp-al-shackle { transform: translate(5px, -3px) rotate(18deg); transform-origin: 24.5px 21px; }
+.fp-al-plq.off .fp-al-led { animation: none; }
+.fp-al-plq.arming { --al: #ffa41b; --al-txt: #ffc04d; }
+.fp-al-plq.unknown { --al: #8a8f98; --al-txt: #c4c8ce; box-shadow: none; }
+.fp-al-plq.unknown .fp-al-led { animation: none; }
+.fp-al-plq.alert { animation: fp-al-plq-blink 0.5s ease-in-out infinite; }
+.fp-al-plq.alert .fp-al-led { animation-duration: 0.35s; }
+@keyframes fp-al-plq-blink { 0%, 100% { box-shadow: 0 0 calc(var(--fp-s) * 0.5) #ff1a1a; background: rgba(120, 0, 0, 0.9); }
+  50% { box-shadow: 0 0 calc(var(--fp-s) * 0.1) #ff1a1a; background: rgba(14, 6, 8, 0.86); } }
+`;
 
 const BADGE_CSS = `
 .fp-badges { position: absolute; inset: 0; pointer-events: none; }
@@ -997,6 +1076,10 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "cover.drzwi2", label: "Drzwi wejściowe 2 (główne) – stan", value: covers.drzwi2 || "", entity: true },
         { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
       ] },
+      { group: "Alarm (Ropam)", icon: "mdi:shield-home", fields: [
+        { id: "alarm_entity", label: "Centrala alarmu: stan + Uzbrój/Rozbrój (alarm_control_panel.*)", value: c.alarm_entity === undefined ? DEFAULT_ALARM : (c.alarm_entity || ""), entity: true },
+        { id: "alarm_violation_entity", label: "Naruszenie strefy (opcjonalnie, binary_sensor; on = mocniej miga)", value: c.alarm_violation_entity === undefined ? DEFAULT_ALARM_VIOL : (c.alarm_violation_entity || ""), entity: true },
+      ] },
       { group: "Pogoda (opady na działce)", icon: "mdi:weather-pouring", fields: [
         { id: "weather_entity", label: "Encja pogody weather.* (deszcz, śnieg, burza widać na działce; puste = pierwsza z HA)", value: c.weather_entity || "", entity: true },
       ] },
@@ -1027,6 +1110,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
     else if (id === "garage_action") c.garage_action = v || undefined;
     else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "weather_entity") c.weather_entity = v || undefined;
+    else if (id === "alarm_entity") c.alarm_entity = v === DEFAULT_ALARM ? undefined : (v || false);
+    else if (id === "alarm_violation_entity") c.alarm_violation_entity = v === DEFAULT_ALARM_VIOL ? undefined : (v || false);
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
     this._emit(c);
   }
@@ -1246,6 +1331,10 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
         o.textContent = ROOMS[k].name;
         this._aRoom.appendChild(o);
       }
+      const oh = document.createElement("option");
+      oh.value = HOUSE_KEY;
+      oh.textContent = "Obrys domu (alarm)";
+      this._aRoom.appendChild(oh);
       this._aStage = q(".fp-area-stage");
       this._aImg = q(".fp-area-stage img");
       this._aSvg = q(".fp-area-stage svg");
@@ -1314,6 +1403,15 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
         const o = this._aOrient.value;
         const r = this._aRoom.value;
         const key = this._areaThemeKey(o);
+        if (r === HOUSE_KEY && key) {
+          const d = defaultHouseOutline(THEMES[key]);
+          if (!d) return;
+          const areas = this._areas();
+          areas[o] = areas[o] || {};
+          areas[o][r] = d.map((p) => [...p]);
+          this._saveAreas(areas);
+          return;
+        }
         const tr = key && THEMES[key].rooms && THEMES[key].rooms[r];
         const b = tr && tr.light && tr.light.box;
         if (!b) return;
@@ -1339,7 +1437,7 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
     const areas = this._areas()[o] || {};
     let svg = "";
     let labels = "";
-    for (const [rk, def] of Object.entries(ROOMS)) {
+    for (const [rk, def] of [...Object.entries(ROOMS), [HOUSE_KEY, { name: "Obrys domu" }]]) {
       const pts = areas[rk];
       const tr = th.rooms && th.rooms[rk];
       const isSel = rk === sel;
@@ -1354,6 +1452,15 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
         const b = tr.light.box;
         svg += `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" fill="${isSel ? "rgba(255,193,7,.12)" : "none"}" stroke="${isSel ? "#ffc107" : "rgba(255,255,255,.55)"}" stroke-width="${isSel ? 2 : 1}" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`;
         labels += `<div class="fp-area-lbl${isSel ? " sel" : ""}" style="left:${b[0] + b[2] / 2}%;top:${b[1] + b[3] / 2}%">${def.name}</div>`;
+      }
+    }
+    {
+      // obrys domu (alarm): czerwony; przerywany = domyślny
+      const isSel = sel === HOUSE_KEY;
+      const hp = areas[HOUSE_KEY];
+      if (!(hp && hp.length)) {
+        const d = defaultHouseOutline(th);
+        if (d) svg += `<polygon points="${d.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${isSel ? "#ff3b3b" : "rgba(255,80,80,.55)"}" stroke-width="${isSel ? 2 : 1}" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
       }
     }
     this._aSvg.innerHTML = svg;
@@ -1411,8 +1518,8 @@ Przeciągnij punkt, żeby go przesunąć. Kliknij punkt dwa razy (albo prawym), 
       this._aPts.appendChild(d);
     });
     this._aInfo.textContent = pts.length
-      ? `${ROOMS[sel].name}: ${pts.length} pkt${pts.length < 3 ? " (potrzeba min. 3, żeby był obszar)" : " – zapisane"}. Motyw w tle: ${key}.`
-      : `${ROOMS[sel].name}: używa obszaru domyślnego (przerywany). Klikaj w rogi, żeby narysować własny. Motyw w tle: ${key}.`;
+      ? `${sel === HOUSE_KEY ? "Obrys domu (alarm)" : ROOMS[sel].name}: ${pts.length} pkt${pts.length < 3 ? " (potrzeba min. 3, żeby był obszar)" : " – zapisane"}. Motyw w tle: ${key}.`
+      : `${sel === HOUSE_KEY ? "Obrys domu (alarm)" : ROOMS[sel].name}: używa obszaru domyślnego (przerywany). Klikaj w rogi, żeby narysować własny. Motyw w tle: ${key}.`;
   }
 
   async _render() {
@@ -1507,7 +1614,8 @@ class HaFloorPlanCard extends HTMLElement {
     let corner = null;
     let fenceGaps = [];
     let house = null;
-    if (key) ({ cfg, layers, badges, corner, fenceGaps, house } = buildThemed(this._config, key));
+    let outline = null;
+    if (key) ({ cfg, layers, badges, corner, fenceGaps, house, outline } = buildThemed(this._config, key));
     else cfg = buildPictureElements(this._config);
     const card = helpers.createCardElement(cfg);
     if (this._hass) card.hass = this._hass;
@@ -1649,7 +1757,7 @@ class HaFloorPlanCard extends HTMLElement {
     const pion = th2 && th2.orient === "pion";
     wrap.style.setProperty("--fp-s", pion ? "clamp(24px, 5.6cqw, 44px)" : "clamp(26px, 2.8cqw, 52px)");
     const style = document.createElement("style");
-    style.textContent = BADGE_CSS;
+    style.textContent = BADGE_CSS + ALARM_CSS;
     wrap.appendChild(style);
     // pogoda: deszcz / śnieg / grad / burza na działce (nad tłem, pod ikonkami), z encji weather.*
     this._stopWeather();
@@ -1669,6 +1777,42 @@ class HaFloorPlanCard extends HTMLElement {
     }
     const blayer = document.createElement("div");
     blayer.className = "fp-badges";
+    this._alarm = null;
+    if (this._config.alarm !== false && this._config.alarm_entity !== false && key && outline) {
+      const thA = THEMES[key];
+      const W = thA.w;
+      const H = thA.h;
+      const P = outline.map(([x, y]) => `${(x / 100 * W).toFixed(1)},${(y / 100 * H).toFixed(1)}`).join(" ");
+      const P2 = `${P} ${P.split(" ")[0]}`; // zamknięta linia dla lasera
+      const sw = Math.max(W, H) / 1000;
+      const ring = document.createElement("div");
+      ring.className = "fp-al-ring";
+      ring.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <polygon class="fp-al-glow" points="${P}" stroke-width="${(9 * sw).toFixed(1)}"/>
+        <polygon class="fp-al-line" points="${P}" stroke-width="${(3.2 * sw).toFixed(1)}"/>
+        <polyline class="fp-al-tail" points="${P2}" pathLength="1000" stroke-width="${(7 * sw).toFixed(1)}"/>
+        <polyline class="fp-al-head" points="${P2}" pathLength="1000" stroke-width="${(5 * sw).toFixed(1)}"/>
+        ${outline.map(([x, y]) => `<circle class="fp-al-dot" cx="${(x / 100 * W).toFixed(1)}" cy="${(y / 100 * H).toFixed(1)}" r="${(5 * sw).toFixed(1)}"/>`).join("")}
+      </svg>`;
+      wrap.appendChild(ring);
+      // plakietka nad domem (w pionie na krawędzi dachu, po prawej, żeby nie wejść na kamerę „tył”)
+      const pion = thA.orient === "pion";
+      const xs = outline.map((p) => p[0]);
+      const top = Math.min(...outline.map((p) => p[1]));
+      const plq = document.createElement("div");
+      plq.className = "fp-al-plq" + (pion ? " fp-al-pion" : "");
+      plq.style.left = `${pion ? 74 : (Math.min(...xs) + Math.max(...xs)) / 2}%`;
+      plq.style.top = `${pion ? top : top - 1.5}%`;
+      plq.innerHTML = `<div class="fp-al-shield"><svg viewBox="0 0 40 46" aria-hidden="true">
+          <path d="M20 2 L37 8 V22 C37 33 29.5 41 20 44 C10.5 41 3 33 3 22 V8 Z" fill="none" stroke="currentColor" stroke-width="3"/>
+          <rect x="12.5" y="21" width="15" height="12" rx="2" fill="currentColor"/>
+          <path class="fp-al-shackle" d="M15.5 21 V17 A4.5 4.5 0 0 1 24.5 17 V21" fill="none" stroke="currentColor" stroke-width="2.6"/>
+          <circle cx="20" cy="26.5" r="1.8" fill="#111"/></svg></div>
+        <div class="fp-al-txt"><b>ALARM</b><span></span></div><i class="fp-al-led"></i>`;
+      blayer.appendChild(plq);
+      this._alarm = { ring, plq, state: null };
+      this._bindAlarm(plq);
+    }
     this._badges = badges.map((b) => {
       const el = document.createElement("div");
       if (b.pos) {
@@ -1960,8 +2104,104 @@ class HaFloorPlanCard extends HTMLElement {
     }
   }
 
+  _alarmIds() {
+    const c = this._config || {};
+    return { panel: c.alarm_entity === undefined ? DEFAULT_ALARM : c.alarm_entity,
+      viol: c.alarm_violation_entity === undefined ? DEFAULT_ALARM_VIOL : c.alarm_violation_entity };
+  }
+
+  _updateAlarm() {
+    const al = this._alarm;
+    if (!al) return;
+    const { panel, viol } = this._alarmIds();
+    const states = (this._hass && this._hass.states) || {};
+    const st = panel && states[panel];
+    if (!st) { al.plq.style.display = "none"; al.ring.className = "fp-al-ring"; return; }
+    al.plq.style.display = "";
+    const v = String(st.state);
+    const violated = !!(viol && states[viol] && states[viol].state === "on");
+    let ring = "";
+    let cls = "";
+    let txt = "";
+    if (v === "triggered") { ring = "alert"; cls = "alert"; txt = "ALARM!"; }
+    else if (v.startsWith("armed_")) { ring = violated ? "alert" : "on"; cls = violated ? "alert" : ""; txt = violated ? "NARUSZENIE" : "WŁĄCZONY"; }
+    else if (v === "arming") { ring = "arming"; cls = "arming"; txt = "UZBRAJANIE"; }
+    else if (v === "pending") { ring = "alert"; cls = "alert arming"; txt = "OPÓŹNIENIE"; }
+    else if (v === "disarming") { ring = "arming"; cls = "arming"; txt = "ROZBRAJANIE"; }
+    else if (v === "disarmed") { cls = violated ? "off alert" : "off"; txt = "WYŁĄCZONY"; }
+    else { cls = "unknown"; txt = "BRAK DANYCH"; }
+    al.state = v;
+    const rc = `fp-al-ring ${ring}`.trim();
+    if (al.ring.className !== rc) al.ring.className = rc;
+    const pc = `fp-al-plq ${al.plq.classList.contains("fp-al-pion") ? "fp-al-pion " : ""}${cls}`.trim();
+    if (al.plq.className !== pc) al.plq.className = pc;
+    const sp = al.plq.querySelector(".fp-al-txt span");
+    if (sp.textContent !== txt) sp.textContent = txt;
+    al.plq.title = `Alarm: ${v}${violated ? " (strefa naruszona)" : ""} – kliknij, żeby ${v === "disarmed" ? "uzbroić" : "rozbroić"}; przytrzymaj = szczegóły`;
+  }
+
+  // klik w plakietkę = Uzbrój / Rozbrój z pytaniem „Na pewno?”, przytrzymanie = okno encji
+  _bindAlarm(el) {
+    let timer = null;
+    let held = false;
+    el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    el.addEventListener("pointerdown", () => {
+      held = false;
+      const seq = this._gestureSeq || 0;
+      timer = setTimeout(() => {
+        if ((this._gestureSeq || 0) !== seq) return;
+        held = true;
+        const { panel } = this._alarmIds();
+        if (panel) this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: panel }, bubbles: true, composed: true }));
+      }, 700);
+    });
+    const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
+    el.addEventListener("pointerup", cancel);
+    el.addEventListener("pointerleave", cancel);
+    el.addEventListener("pointercancel", cancel);
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      cancel();
+      if (held) return;
+      this._confirmAlarm();
+    });
+  }
+
+  _confirmAlarm() {
+    const wrap = this.querySelector(".fp-wrap");
+    const al = this._alarm;
+    if (!wrap || !al || wrap.querySelector(".fp-confirm")) return;
+    const { panel } = this._alarmIds();
+    const v = al.state || "";
+    const arm = v === "disarmed";
+    const dlg = document.createElement("div");
+    dlg.className = "fp-confirm";
+    dlg.innerHTML = `<div class="fp-confirm-box">
+      <ha-icon icon="${arm ? "mdi:shield-lock" : "mdi:shield-off"}"></ha-icon>
+      <div class="fp-confirm-q"></div>
+      <div class="fp-confirm-btns"><button class="fp-no">Nie</button><button class="fp-yes">Tak</button></div></div>`;
+    dlg.querySelector(".fp-confirm-q").textContent = arm ? "Na pewno uzbroić alarm?" : "Na pewno rozbroić alarm?";
+    const yes = dlg.querySelector(".fp-yes");
+    yes.textContent = arm ? "Uzbrój" : "Rozbrój";
+    const close = () => dlg.remove();
+    const openedAt = Date.now();
+    dlg.addEventListener("click", (ev) => { ev.stopPropagation(); if (ev.target === dlg && Date.now() - openedAt > 600) close(); });
+    dlg.querySelector(".fp-no").addEventListener("click", close);
+    yes.addEventListener("click", () => {
+      close();
+      if (!this._hass || !panel) return;
+      const data = { entity_id: panel };
+      if (this._config.alarm_code) data.code = String(this._config.alarm_code);
+      const mode = ["home", "night", "vacation", "custom_bypass"].includes(this._config.alarm_arm_mode) ? this._config.alarm_arm_mode : "away";
+      this._hass.callService("alarm_control_panel", arm ? `alarm_arm_${mode}` : "alarm_disarm", data);
+    });
+    wrap.appendChild(dlg);
+    this._placeConfirm(wrap, dlg.querySelector(".fp-confirm-box"), al.plq);
+  }
+
   _updateLayers() {
     this._updateWeather();
+    this._updateAlarm();
     if (this._layers) {
       for (const l of this._layers) {
         const op = layerOn(l, this._hass) ? "1" : "0";
