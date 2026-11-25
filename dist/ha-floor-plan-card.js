@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.8.0";
+const CARD_VERSION = "1.8.1";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -45,7 +45,8 @@ function polyCentroid(pts) {
 }
 const polyCss = (pts) => `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(", ")})`;
 
-// Karta w prawym górnym rogu nad domem (np. EMS). corner_card: false = brak.
+// Karta w prawym górnym rogu nad domem (np. EMS). corner_card_hide: true = brak.
+// (corner_card: false / pusty nie chowa już karty: tak potrafił zapisać edytor przez pomyłkę i znikał EMS)
 const DEFAULT_CORNER_CARD = { type: "custom:ems-card", device: "ecobss" };
 // Alarm (Ropam): centrala i opcjonalny czujnik naruszenia strefy. alarm: false = bez alarmu na mapie.
 const DEFAULT_ALARM = "alarm_control_panel.ropam_strefa_1";
@@ -951,7 +952,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       show_empty_temp: !!c.show_empty_temp,
       winter_from_nov15: c.winter_from_nov15 !== false,
       fullscreen: c.fullscreen !== false,
-      corner_card: c.corner_card === false ? undefined : (c.corner_card || DEFAULT_CORNER_CARD),
+      corner_card: c.corner_card && typeof c.corner_card === "object" && c.corner_card.type ? c.corner_card : DEFAULT_CORNER_CARD,
     };
     for (const k of EDITOR_ROOMS) {
       const r = rooms[k] || {};
@@ -1023,7 +1024,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
     c.winter_from_nov15 = d.winter_from_nov15 === false ? false : undefined;
     c.fullscreen = d.fullscreen === false ? false : undefined;
     const cc = d.corner_card;
-    if (!cc || typeof cc !== "object" || !Object.keys(cc).length) c.corner_card = false;
+    // puste / niepoprawne pole = domyślny EMS (nie wyłączaj karty po cichu)
+    if (!cc || typeof cc !== "object" || !cc.type) c.corner_card = undefined;
     else if (JSON.stringify(cc) === JSON.stringify(DEFAULT_CORNER_CARD)) c.corner_card = undefined;
     else c.corner_card = cc;
     const rooms = {};
@@ -1077,8 +1079,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
       ] },
       { group: "Alarm (Ropam)", icon: "mdi:shield-home", fields: [
-        { id: "alarm_entity", label: "Centrala alarmu: stan + Uzbrój/Rozbrój (alarm_control_panel.*)", value: c.alarm_entity === undefined ? DEFAULT_ALARM : (c.alarm_entity || ""), entity: true },
-        { id: "alarm_violation_entity", label: "Naruszenie strefy (opcjonalnie, binary_sensor; on = mocniej miga)", value: c.alarm_violation_entity === undefined ? DEFAULT_ALARM_VIOL : (c.alarm_violation_entity || ""), entity: true },
+        { id: "alarm_entity", label: "Centrala alarmu: stan + Uzbrój/Rozbrój (alarm_control_panel.*; puste = domyślna)", value: c.alarm_entity || DEFAULT_ALARM, entity: true },
+        { id: "alarm_violation_entity", label: "Naruszenie strefy (opcjonalnie, binary_sensor; on = mocniej miga; puste = domyślny)", value: c.alarm_violation_entity || DEFAULT_ALARM_VIOL, entity: true },
       ] },
       { group: "Pogoda (opady na działce)", icon: "mdi:weather-pouring", fields: [
         { id: "weather_entity", label: "Encja pogody weather.* (deszcz, śnieg, burza widać na działce; puste = pierwsza z HA)", value: c.weather_entity || "", entity: true },
@@ -1110,8 +1112,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
     else if (id === "garage_action") c.garage_action = v || undefined;
     else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "weather_entity") c.weather_entity = v || undefined;
-    else if (id === "alarm_entity") c.alarm_entity = v === DEFAULT_ALARM ? undefined : (v || false);
-    else if (id === "alarm_violation_entity") c.alarm_violation_entity = v === DEFAULT_ALARM_VIOL ? undefined : (v || false);
+    else if (id === "alarm_entity") c.alarm_entity = !v || v === DEFAULT_ALARM ? undefined : v;
+    else if (id === "alarm_violation_entity") c.alarm_violation_entity = !v || v === DEFAULT_ALARM_VIOL ? undefined : v;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
     this._emit(c);
   }
@@ -1778,7 +1780,7 @@ class HaFloorPlanCard extends HTMLElement {
     const blayer = document.createElement("div");
     blayer.className = "fp-badges";
     this._alarm = null;
-    if (this._config.alarm !== false && this._config.alarm_entity !== false && key && outline) {
+    if (this._config.alarm !== false && key && outline) try {
       const thA = THEMES[key];
       const W = thA.w;
       const H = thA.h;
@@ -1812,6 +1814,10 @@ class HaFloorPlanCard extends HTMLElement {
       blayer.appendChild(plq);
       this._alarm = { ring, plq, state: null };
       this._bindAlarm(plq);
+    } catch (e) {
+      // błąd alarmu nie może zabrać reszty mapy (EMS, bramy, ikonki)
+      console.error("ha-floor-plan-card alarm:", e);
+      this._alarm = null;
     }
     this._badges = badges.map((b) => {
       const el = document.createElement("div");
@@ -1892,7 +1898,9 @@ class HaFloorPlanCard extends HTMLElement {
   _addCornerCard(helpers, wrap, corner) {
     if (this._cornerRO) { this._cornerRO.disconnect(); this._cornerRO = null; }
     this._corner = null;
-    const cc = this._config.corner_card === undefined ? DEFAULT_CORNER_CARD : this._config.corner_card;
+    if (this._config.corner_card_hide === true) return null;
+    const c0 = this._config.corner_card;
+    const cc = c0 && typeof c0 === "object" && c0.type ? c0 : DEFAULT_CORNER_CARD;
     if (!cc || typeof cc !== "object" || !cc.type) return null;
     // Holder, do którego wkładamy kartę. Karta „custom:” może się załadować później niż mapa – wtedy HA daje
     // tymczasową kartę błędu i prosi o przebudowę (ll-rebuild). Czekamy na nią i budujemy kartę na nowo,
@@ -2106,8 +2114,12 @@ class HaFloorPlanCard extends HTMLElement {
 
   _alarmIds() {
     const c = this._config || {};
-    return { panel: c.alarm_entity === undefined ? DEFAULT_ALARM : c.alarm_entity,
-      viol: c.alarm_violation_entity === undefined ? DEFAULT_ALARM_VIOL : c.alarm_violation_entity };
+    const states = (this._hass && this._hass.states) || {};
+    let panel = typeof c.alarm_entity === "string" && c.alarm_entity.trim() ? c.alarm_entity.trim() : DEFAULT_ALARM;
+    // gdy takiej encji nie ma w HA: pierwsza centrala alarmu, jaka jest
+    if (!states[panel]) panel = Object.keys(states).find((k) => k.startsWith("alarm_control_panel.")) || panel;
+    const viol = typeof c.alarm_violation_entity === "string" && c.alarm_violation_entity.trim() ? c.alarm_violation_entity.trim() : DEFAULT_ALARM_VIOL;
+    return { panel, viol };
   }
 
   _updateAlarm() {
@@ -2116,8 +2128,15 @@ class HaFloorPlanCard extends HTMLElement {
     const { panel, viol } = this._alarmIds();
     const states = (this._hass && this._hass.states) || {};
     const st = panel && states[panel];
-    if (!st) { al.plq.style.display = "none"; al.ring.className = "fp-al-ring"; return; }
-    al.plq.style.display = "";
+    if (!st) {
+      // bez encji w HA: szara plakietka (widać, że alarm jest, tylko brak danych), bez ramki
+      al.ring.className = "fp-al-ring";
+      al.plq.className = `fp-al-plq ${al.plq.classList.contains("fp-al-pion") ? "fp-al-pion " : ""}unknown`;
+      al.plq.querySelector(".fp-al-txt span").textContent = "BRAK ENCJI";
+      al.plq.title = `Nie ma encji ${panel} w HA – ustaw ją w edytorze karty (Alarm)`;
+      al.state = null;
+      return;
+    }
     const v = String(st.state);
     const violated = !!(viol && states[viol] && states[viol].state === "on");
     let ring = "";
@@ -2170,7 +2189,7 @@ class HaFloorPlanCard extends HTMLElement {
   _confirmAlarm() {
     const wrap = this.querySelector(".fp-wrap");
     const al = this._alarm;
-    if (!wrap || !al || wrap.querySelector(".fp-confirm")) return;
+    if (!wrap || !al || !al.state || wrap.querySelector(".fp-confirm")) return;
     const { panel } = this._alarmIds();
     const v = al.state || "";
     const arm = v === "disarmed";
@@ -2200,8 +2219,8 @@ class HaFloorPlanCard extends HTMLElement {
   }
 
   _updateLayers() {
-    this._updateWeather();
-    this._updateAlarm();
+    try { this._updateWeather(); } catch (e) { console.error("ha-floor-plan-card pogoda:", e); }
+    try { this._updateAlarm(); } catch (e) { console.error("ha-floor-plan-card alarm:", e); }
     if (this._layers) {
       for (const l of this._layers) {
         const op = layerOn(l, this._hass) ? "1" : "0";

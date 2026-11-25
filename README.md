@@ -242,7 +242,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `open_states` | `{ brama: "open", drzwi1: "on" }`: stan oznaczający „otwarte”. |
 | `gate_action` | Brama wjazdowa (suwana): encja wywoływana po potwierdzeniu (`cover`/`button`/`switch`/`script`). |
 | `room_areas` | Obszary świateł narysowane w edytorze (sekcja „Obszary świateł (rysowanie)”): `{ poziom: { salon: [[x%, y%], …] }, pion: {…}, szeroki: {…} }`. Pokój z obszarem świeci w swoim kształcie, klik w niego przełącza światło. Przycisk „Przenieś na inne układy” przelicza narysowane obszary na telefon i szeroki według obrysu domu. |
-| `corner_card` | (Mapa czeka na tę kartę bez limitu i wstawia ją, gdy się załaduje.) Dowolna karta HA w prawym górnym rogu nad domem, domyślnie `{ type: custom:ems-card, device: ecobss }`. Skaluje się, żeby zmieścić się nad dachem; na telefonie (pion) jest pod mapą. `false` = brak. |
+| `corner_card` | (Mapa czeka na tę kartę bez limitu i wstawia ją, gdy się załaduje.) Dowolna karta HA w prawym górnym rogu nad domem, domyślnie `{ type: custom:ems-card, device: ecobss }`. Skaluje się, żeby zmieścić się nad dachem; na telefonie (pion) jest mała w prawym górnym rogu. Pusta albo `false` = domyślny EMS. |
+| `corner_card_hide` | `true` = bez karty w rogu. |
 | `gate_in_fence` | Brama wjazdowa (naprzeciwko garażu, długie skrzydło) i furtka (naprzeciwko drzwi głównych) stoją w płocie przy dolnej krawędzi; kamera „przód” za bramą, „wejście” w prawym rogu. `false` = stare ułożenie. |
 | `fence_y` | Linia ziemi płotu w % wysokości obrazka (domyślnie 99,3). |
 | `fence_gap` | `false` = nie zamalowuj płotu z tła pod bramą i furtką (domyślnie zamalowany śniegiem/trawą). |
