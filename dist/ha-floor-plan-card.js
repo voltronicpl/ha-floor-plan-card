@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.8.2";
+const CARD_VERSION = "1.8.3";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -369,6 +369,15 @@ function buildThemed(config, key) {
     }
   }
 
+  // telewizor w salonie: klik = pilot (okno encji tv_entity albo przejście do widoku tv_navigate)
+  if (config.tv !== false) {
+    const sb = th.rooms && th.rooms.salon && th.rooms.salon.light && th.rooms.salon.light.box;
+    const r = Array.isArray(config.tv_rect) && config.tv_rect.length === 4 ? config.tv_rect.map(Number)
+      : sb ? [sb[0] + sb[2] * 0.49, sb[1] + sb[3] * 0.23, sb[2] * 0.06, sb[3] * 0.42] : null;
+    if (r && r.every((x) => isFinite(x))) badges.push({ kind: "tv", entity: config.tv_entity || null, nav: config.tv_navigate || null,
+      name: "Telewizor", pos: [r[0], r[1]], size: [r[2], r[3]] });
+  }
+
   // wietrzenie: mała ikonka nad kuchenką w kuchni; klik = wciśnij wybraną encję (vent_entity)
   if (config.vent !== false) {
     const kb = th.rooms && th.rooms.kuchnia && th.rooms.kuchnia.light && th.rooms.kuchnia.light.box;
@@ -674,6 +683,9 @@ const BADGE_CSS = `
   background: radial-gradient(circle at 50% 40%, #ffd78a 0%, #f6a83c 55%, #c9761e 100%);
   box-shadow: 0 0 calc(var(--fp-s) * 0.18) rgba(255, 176, 72, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4); }
 .fp-light.na { opacity: 0.45; }
+.fp-tv { position: absolute; pointer-events: auto; cursor: pointer; border-radius: 6px; -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.25s ease, background 0.25s ease; }
+.fp-tv:hover, .fp-tv.hit { background: rgba(90, 170, 255, 0.18); box-shadow: 0 0 0 2px rgba(120, 190, 255, 0.85), 0 0 14px rgba(90, 170, 255, 0.7); }
 .fp-light.fp-vent { width: calc(var(--fp-s) * 0.72); height: calc(var(--fp-s) * 0.72); --mdc-icon-size: calc(var(--fp-s) * 0.44); }
 .fp-light.fp-vent.on { background: radial-gradient(circle at 50% 40%, #9be7ff 0%, #3fb6e6 55%, #1c7fae 100%);
   border-color: rgba(160, 230, 255, 0.9); box-shadow: 0 0 calc(var(--fp-s) * 0.18) rgba(80, 200, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4); }
@@ -1093,6 +1105,10 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "cover.drzwi2", label: "Drzwi wejściowe 2 (główne) – stan", value: covers.drzwi2 || "", entity: true },
         { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
       ] },
+      { group: "Telewizor (klik = pilot)", icon: "mdi:remote-tv", fields: [
+        { id: "tv_entity", label: "Pilot – encja otwierana po kliknięciu w telewizor (remote.*, media_player.*…)", value: c.tv_entity || "", entity: true },
+        { id: "tv_navigate", label: "albo widok pilota w HA (np. /lovelace/pilot) – ma pierwszeństwo przed encją", value: c.tv_navigate || "" },
+      ] },
       { group: "Wietrzenie (ikonka nad kuchenką)", icon: "mdi:fan", fields: [
         { id: "vent_entity", label: "Encja wietrzenia – klik w ikonkę ją wciska (button, script, switch, fan…)", value: c.vent_entity || "", entity: true },
       ] },
@@ -1131,6 +1147,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
     else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "weather_entity") c.weather_entity = v || undefined;
     else if (id === "vent_entity") c.vent_entity = v || undefined;
+    else if (id === "tv_entity") c.tv_entity = v || undefined;
+    else if (id === "tv_navigate") c.tv_navigate = v || undefined;
     else if (id === "alarm_entity") c.alarm_entity = !v || v === DEFAULT_ALARM ? undefined : v;
     else if (id === "alarm_violation_entity") c.alarm_violation_entity = !v || v === DEFAULT_ALARM_VIOL ? undefined : v;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
@@ -1887,6 +1905,22 @@ class HaFloorPlanCard extends HTMLElement {
         el.innerHTML = `<img alt=""><div class="fp-cam-label"><ha-icon icon="mdi:cctv"></ha-icon><span></span></div>`;
         el.querySelector("span").textContent = b.name.replace(/^Kamera /, "");
         this._bindPress(el, b.entity, true); // klik = podgląd na żywo (okno encji)
+      } else if (b.kind === "tv") {
+        el.className = "fp-tv";
+        el.style.width = `${b.size[0]}%`;
+        el.style.height = `${b.size[1]}%`;
+        el.title = b.nav ? `Telewizor – pilot (${b.nav})` : b.entity ? `Telewizor – pilot (${b.entity})` : "Telewizor – wybierz encję pilota w edytorze karty";
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          el.classList.add("hit");
+          setTimeout(() => el.classList.remove("hit"), 400);
+          if (b.nav) {
+            history.pushState(null, "", b.nav);
+            window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+          } else if (b.entity) {
+            this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: b.entity }, bubbles: true, composed: true }));
+          }
+        });
       } else if (b.kind === "vent") {
         el.className = "fp-light fp-vent";
         el.title = b.entity ? `Wietrzenie – kliknij, żeby włączyć (${b.entity}); przytrzymaj = szczegóły` : "Wietrzenie – wybierz encję w edytorze karty";
@@ -2192,7 +2226,7 @@ class HaFloorPlanCard extends HTMLElement {
       held = false;
       const seq = this._gestureSeq || 0;
       timer = setTimeout(() => {
-        if ((this._gestureSeq || 0) !== seq) return;
+        if (this._gestureBusy(seq)) return;
         held = true;
         const { panel } = this._alarmIds();
         if (panel) this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: panel }, bubbles: true, composed: true }));
@@ -2303,6 +2337,7 @@ class HaFloorPlanCard extends HTMLElement {
         }
         continue;
       }
+      if (b.kind === "tv") continue;
       if (b.kind === "vent") {
         // świeci, gdy encja jest włączona (wentylator/przełącznik) albo przez chwilę po wciśnięciu przycisku
         const on = (!!st && ["on", "open", "heat", "cool"].includes(st.state)) || (b._pressedUntil || 0) > Date.now();
@@ -2354,7 +2389,7 @@ class HaFloorPlanCard extends HTMLElement {
       held = false;
       el.classList.add("pressing");
       const seq = this._gestureSeq || 0;
-      timer = setTimeout(() => { if ((this._gestureSeq || 0) !== seq) { cancel(); return; } held = true; cancel(); this._confirmGate(b); }, holdMs);
+      timer = setTimeout(() => { if (this._gestureBusy(seq)) { cancel(); return; } held = true; cancel(); this._confirmGate(b); }, holdMs);
     });
     el.addEventListener("pointerup", () => { if (!held) cancel(); });
     el.addEventListener("pointerleave", cancel);
@@ -2439,6 +2474,11 @@ class HaFloorPlanCard extends HTMLElement {
   // Przybliżanie palcami (telefon): dwa palce = zoom, jeden palec po przybliżeniu = przesuwanie,
   // podwójne stuknięcie = powrót. Przytrzymanie bram i klikanie ikonek działa jak wcześniej
   // (gest anuluje przytrzymanie, a klik zaraz po przesunięciu jest ignorowany). pinch_zoom: false wyłącza.
+  // przytrzymanie nie odpala się, gdy w międzyczasie był gest, leżą dwa palce albo gest był przed chwilą
+  _gestureBusy(seq) {
+    return (this._gestureSeq || 0) !== seq || (this._touchN || 0) > 1 || Date.now() - (this._multiAt || 0) < 900;
+  }
+
   _initZoom(box, wrap) {
     if (this._config.pinch_zoom === false) { this._zoom = null; return; }
     const zs = { z: 1, tx: 0, ty: 0 };
@@ -2472,11 +2512,25 @@ class HaFloorPlanCard extends HTMLElement {
         start = { pinch: false, p: a[0], tx: zs.tx, ty: zs.ty };
       } else start = null;
     };
+    // HA (picture-elements) liczy własne przytrzymania/stuknięcia; „touchcancel” na dokumencie je przerywa
+    let lastHush = 0;
+    const hush = () => {
+      lastHush = Date.now();
+      try { document.dispatchEvent(new Event("touchcancel")); } catch (err) { /* nic */ }
+    };
+    const multi = () => { this._multiAt = Date.now(); };
     box.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse") return;
       pts.set(e.pointerId, local(e));
+      this._touchN = pts.size;
       if (pts.size === 1) moved = false;
-      if (pts.size >= 2) { moved = true; this._gestureSeq = (this._gestureSeq || 0) + 1; }
+      if (pts.size >= 2) {
+        moved = true;
+        this._gestureSeq = (this._gestureSeq || 0) + 1;
+        multi();
+        hush();
+        setTimeout(hush, 0); // po touchstart, który HA obsłuży zaraz po tym zdarzeniu
+      }
       begin();
     }, true);
     box.addEventListener("pointermove", (e) => {
@@ -2494,19 +2548,26 @@ class HaFloorPlanCard extends HTMLElement {
         zs.z = z; zs.tx = mid[0] - cx * z; zs.ty = mid[1] - cy * z;
         apply(false);
         e.preventDefault();
+        multi();
+        if (Date.now() - lastHush > 120) hush();
       } else if (!start.pinch && zs.z > 1) {
         const p = pts.get(e.pointerId);
         const dx = p[0] - start.p[0];
         const dy = p[1] - start.p[1];
         if (!moved && Math.hypot(dx, dy) > 8) { moved = true; this._gestureSeq = (this._gestureSeq || 0) + 1; }
-        if (moved) { zs.tx = start.tx + dx; zs.ty = start.ty + dy; apply(false); e.preventDefault(); }
+        if (moved) {
+          zs.tx = start.tx + dx; zs.ty = start.ty + dy; apply(false); e.preventDefault();
+          multi();
+          if (Date.now() - lastHush > 120) hush();
+        }
       }
     }, true);
     const end = (e) => {
       if (!pts.has(e.pointerId)) return;
       const p = pts.get(e.pointerId);
       pts.delete(e.pointerId);
-      if (moved) suppressUntil = Date.now() + 350;
+      this._touchN = pts.size;
+      if (moved) { suppressUntil = Date.now() + 600; multi(); hush(); }
       if (!pts.size) {
         // podwójne stuknięcie (bez przesuwania) przy przybliżeniu = powrót do całej mapy
         const now = Date.now();
@@ -2523,7 +2584,11 @@ class HaFloorPlanCard extends HTMLElement {
     box.addEventListener("pointerup", end, true);
     box.addEventListener("pointercancel", end, true);
     // klik zaraz po geście nie przełącza światła ani nie otwiera okna
-    box.addEventListener("click", (e) => { if (Date.now() < suppressUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
+    const swallow = (e) => { if (Date.now() < suppressUntil || (pts.size > 1)) { e.stopPropagation(); if (e.cancelable && e.type !== "touchend") e.preventDefault(); } };
+    box.addEventListener("click", swallow, true);
+    box.addEventListener("mouseup", swallow, true);
+    box.addEventListener("mousedown", swallow, true);
+    box.addEventListener("contextmenu", (e) => { if (pts.size > 1 || Date.now() < suppressUntil) e.preventDefault(); }, true);
   }
 
   // wietrzenie: klik = wciśnij (button/script/scene/switch…), przytrzymanie = szczegóły encji
@@ -2535,7 +2600,7 @@ class HaFloorPlanCard extends HTMLElement {
       held = false;
       const seq = this._gestureSeq || 0;
       timer = setTimeout(() => {
-        if ((this._gestureSeq || 0) !== seq || !b.entity) return;
+        if (this._gestureBusy(seq) || !b.entity) return;
         held = true;
         this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: b.entity }, bubbles: true, composed: true }));
       }, 600);
@@ -2571,7 +2636,7 @@ class HaFloorPlanCard extends HTMLElement {
     el.addEventListener("pointerdown", () => {
       held = false;
       const seq = this._gestureSeq || 0;
-      timer = setTimeout(() => { if ((this._gestureSeq || 0) !== seq) return; held = true; moreInfo(); }, 500);
+      timer = setTimeout(() => { if (this._gestureBusy(seq)) return; held = true; moreInfo(); }, 500);
     });
     const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
     el.addEventListener("pointerleave", cancel);

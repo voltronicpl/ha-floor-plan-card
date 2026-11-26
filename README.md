@@ -251,6 +251,8 @@ Pełny przykład ze wszystkimi pokojami: [`examples/karta_hacs.yaml`](examples/k
 | `weather_effects` | `false` = bez opadów na mapie. |
 | `vent_entity` | Wietrzenie: mała ikonka wiatraka nad kuchenką; klik wciska tę encję (button/input_button = naciśnij, script/scene = uruchom, automation = wyzwól, reszta = przełącz), przytrzymanie = szczegóły. Też w edytorze. |
 | `vent_pos` | Własne miejsce ikonki wietrzenia `[x%, y%]`. `vent: false` = bez ikonki. |
+| `tv_entity` | Klik w telewizor w salonie otwiera pilota: okno tej encji (`remote.*`, `media_player.*`…). Też w edytorze. |
+| `tv_navigate` | Zamiast encji: widok pilota w HA, np. `/lovelace/pilot` (ma pierwszeństwo). `tv_rect: [x, y, szer, wys]` w % = własna strefa, `tv: false` = wyłącz. |
 | `alarm_entity` | Centrala alarmu (domyślnie `alarm_control_panel.ropam_strefa_1`). Uzbrojony: czerwona neonowa ramka wokół domu, laser biegnący dookoła i plakietka „ALARM WŁĄCZONY”. Rozbrojony: zielona plakietka „ALARM WYŁĄCZONY”. Klik w plakietkę = Uzbrój/Rozbrój z pytaniem „Na pewno?”, przytrzymanie = szczegóły. Uzbrajanie i opóźnienie są pomarańczowe, a wyzwolony alarm miga. `false` = bez alarmu. Też w edytorze. |
 | `alarm_violation_entity` | Naruszenie strefy (domyślnie `binary_sensor.ropam_strefa_1_naruszona`): przy `on` ramka i plakietka migają mocniej. |
 | `alarm_code` | Kod do uzbrajania/rozbrajania, jeśli centrala go wymaga. |
