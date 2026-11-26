@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.8.1";
+const CARD_VERSION = "1.8.2";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -369,6 +369,15 @@ function buildThemed(config, key) {
     }
   }
 
+  // wietrzenie: mała ikonka nad kuchenką w kuchni; klik = wciśnij wybraną encję (vent_entity)
+  if (config.vent !== false) {
+    const kb = th.rooms && th.rooms.kuchnia && th.rooms.kuchnia.light && th.rooms.kuchnia.light.box;
+    const vp = Array.isArray(config.vent_pos) && config.vent_pos.length === 2 && config.vent_pos.every((x) => isFinite(Number(x)))
+      ? config.vent_pos.map(Number)
+      : kb ? [kb[0] + kb[2] * 0.27, kb[1] + kb[3] * (th.orient === "pion" ? 0.45 : 0.6)] : null;
+    if (vp) badges.push({ kind: "vent", entity: config.vent_entity || null, name: "Wietrzenie", pos: vp });
+  }
+
   for (const [ck, def] of Object.entries(COVERS)) {
     const entity = covers[ck];
     const tc = th.covers && th.covers[ck];
@@ -665,6 +674,12 @@ const BADGE_CSS = `
   background: radial-gradient(circle at 50% 40%, #ffd78a 0%, #f6a83c 55%, #c9761e 100%);
   box-shadow: 0 0 calc(var(--fp-s) * 0.18) rgba(255, 176, 72, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4); }
 .fp-light.na { opacity: 0.45; }
+.fp-light.fp-vent { width: calc(var(--fp-s) * 0.72); height: calc(var(--fp-s) * 0.72); --mdc-icon-size: calc(var(--fp-s) * 0.44); }
+.fp-light.fp-vent.on { background: radial-gradient(circle at 50% 40%, #9be7ff 0%, #3fb6e6 55%, #1c7fae 100%);
+  border-color: rgba(160, 230, 255, 0.9); box-shadow: 0 0 calc(var(--fp-s) * 0.18) rgba(80, 200, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4); }
+.fp-light.fp-vent.on ha-icon { animation: fp-vent-spin 1.2s linear infinite; }
+.fp-light.fp-vent ha-icon { display: flex; }
+@keyframes fp-vent-spin { to { transform: rotate(360deg); } }
 .fp-light:hover { transform: translate(-50%, -50%) scale(1.08); }
 .fp-temp { transform: translate(-50%, -50%); display: flex; align-items: center; gap: 2px; white-space: nowrap;
   padding: calc(var(--fp-s) * 0.06) calc(var(--fp-s) * 0.22) calc(var(--fp-s) * 0.06) calc(var(--fp-s) * 0.1);
@@ -1078,6 +1093,9 @@ class HaFloorPlanCardEditor extends HTMLElement {
         { id: "cover.drzwi2", label: "Drzwi wejściowe 2 (główne) – stan", value: covers.drzwi2 || "", entity: true },
         { id: "open.drzwi2", label: "Drzwi 2: stan „otwarte”", value: os.drzwi2 || "" },
       ] },
+      { group: "Wietrzenie (ikonka nad kuchenką)", icon: "mdi:fan", fields: [
+        { id: "vent_entity", label: "Encja wietrzenia – klik w ikonkę ją wciska (button, script, switch, fan…)", value: c.vent_entity || "", entity: true },
+      ] },
       { group: "Alarm (Ropam)", icon: "mdi:shield-home", fields: [
         { id: "alarm_entity", label: "Centrala alarmu: stan + Uzbrój/Rozbrój (alarm_control_panel.*; puste = domyślna)", value: c.alarm_entity || DEFAULT_ALARM, entity: true },
         { id: "alarm_violation_entity", label: "Naruszenie strefy (opcjonalnie, binary_sensor; on = mocniej miga; puste = domyślny)", value: c.alarm_violation_entity || DEFAULT_ALARM_VIOL, entity: true },
@@ -1112,6 +1130,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
     else if (id === "garage_action") c.garage_action = v || undefined;
     else if (id === "wicket_action") c.wicket_action = v || undefined;
     else if (id === "weather_entity") c.weather_entity = v || undefined;
+    else if (id === "vent_entity") c.vent_entity = v || undefined;
     else if (id === "alarm_entity") c.alarm_entity = !v || v === DEFAULT_ALARM ? undefined : v;
     else if (id === "alarm_violation_entity") c.alarm_violation_entity = !v || v === DEFAULT_ALARM_VIOL ? undefined : v;
     else if (id === "gate_hold_ms") c.gate_hold_ms = v && Number(v) !== 1000 ? Number(v) : undefined;
@@ -1868,6 +1887,11 @@ class HaFloorPlanCard extends HTMLElement {
         el.innerHTML = `<img alt=""><div class="fp-cam-label"><ha-icon icon="mdi:cctv"></ha-icon><span></span></div>`;
         el.querySelector("span").textContent = b.name.replace(/^Kamera /, "");
         this._bindPress(el, b.entity, true); // klik = podgląd na żywo (okno encji)
+      } else if (b.kind === "vent") {
+        el.className = "fp-light fp-vent";
+        el.title = b.entity ? `Wietrzenie – kliknij, żeby włączyć (${b.entity}); przytrzymaj = szczegóły` : "Wietrzenie – wybierz encję w edytorze karty";
+        el.innerHTML = `<ha-icon icon="mdi:fan"></ha-icon>`;
+        this._bindVent(el, b);
       } else if (b.kind === "light") {
         el.className = "fp-light";
         el.title = `${b.name} - światło`;
@@ -2279,6 +2303,13 @@ class HaFloorPlanCard extends HTMLElement {
         }
         continue;
       }
+      if (b.kind === "vent") {
+        // świeci, gdy encja jest włączona (wentylator/przełącznik) albo przez chwilę po wciśnięciu przycisku
+        const on = (!!st && ["on", "open", "heat", "cool"].includes(st.state)) || (b._pressedUntil || 0) > Date.now();
+        b.el.classList.toggle("on", on);
+        b.el.classList.toggle("na", !b.entity || !st || st.state === "unavailable");
+        continue;
+      }
       if (b.kind === "light") {
         const on = !!st && st.state === "on";
         b.el.classList.toggle("on", on);
@@ -2493,6 +2524,41 @@ class HaFloorPlanCard extends HTMLElement {
     box.addEventListener("pointercancel", end, true);
     // klik zaraz po geście nie przełącza światła ani nie otwiera okna
     box.addEventListener("click", (e) => { if (Date.now() < suppressUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
+  }
+
+  // wietrzenie: klik = wciśnij (button/script/scene/switch…), przytrzymanie = szczegóły encji
+  _bindVent(el, b) {
+    let timer = null;
+    let held = false;
+    el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    el.addEventListener("pointerdown", () => {
+      held = false;
+      const seq = this._gestureSeq || 0;
+      timer = setTimeout(() => {
+        if ((this._gestureSeq || 0) !== seq || !b.entity) return;
+        held = true;
+        this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: b.entity }, bubbles: true, composed: true }));
+      }, 600);
+    });
+    const cancel = () => { if (timer) clearTimeout(timer); timer = null; };
+    el.addEventListener("pointerup", cancel);
+    el.addEventListener("pointerleave", cancel);
+    el.addEventListener("pointercancel", cancel);
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      cancel();
+      if (held || !b.entity || !this._hass) return;
+      const id = b.entity;
+      const d = id.split(".")[0];
+      const data = { entity_id: id };
+      if (d === "button" || d === "input_button") this._hass.callService(d, "press", data);
+      else if (d === "script" || d === "scene") this._hass.callService(d, "turn_on", data);
+      else if (d === "automation") this._hass.callService("automation", "trigger", data);
+      else this._hass.callService("homeassistant", "toggle", data);
+      b._pressedUntil = Date.now() + 1500;
+      el.classList.add("on", "fp-vent-press");
+      setTimeout(() => { el.classList.remove("fp-vent-press"); this._updateLayers(); }, 1600);
+    });
   }
 
   // klik = przełącz (światło), przytrzymanie / klik w temperaturę = szczegóły encji
