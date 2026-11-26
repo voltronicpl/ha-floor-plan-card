@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.8.4";
+const CARD_VERSION = "1.8.5";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -1622,6 +1622,7 @@ class HaFloorPlanCard extends HTMLElement {
     if (this._onResize) window.removeEventListener("resize", this._onResize);
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
     if (this._camTimer) { clearInterval(this._camTimer); this._camTimer = null; }
+    if (this._popupClose && this._popup) this._popupClose();
     if (this._wx && this._wx.raf) { cancelAnimationFrame(this._wx.raf); this._wx.raf = 0; this._wx.kind = null; }
   }
 
@@ -2601,33 +2602,38 @@ class HaFloorPlanCard extends HTMLElement {
 
   // Dowolna karta HA (np. pilot z HACS) w okienku nad mapą; zamykanie: tło, ✕ albo Esc
   async _openCardPopup(cfg, title) {
-    if (this.querySelector(".fp-popup")) return;
+    if (this._popup && this._popup.isConnected) return;
+    // pilot z HACS (piloty-card): od razu pełny pilot, nie kafelek
+    if (String(cfg.type) === "custom:piloty-card") cfg = { ...cfg, mode: "card" };
+    // okienko wprost w <body>: w HA rodzic karty potrafi mieć transform, przez co „fixed” uciekało w bok na telefonie
     const ov = document.createElement("div");
     ov.className = "fp-popup";
-    Object.assign(ov.style, { position: "fixed", inset: "0", zIndex: "9", background: "rgba(0,0,0,0.55)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", boxSizing: "border-box" });
+    Object.assign(ov.style, { position: "fixed", left: "0", top: "0", width: "100vw", height: "100dvh", zIndex: "9999",
+      background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "8px", boxSizing: "border-box", overscrollBehavior: "contain" });
     const box = document.createElement("div");
-    Object.assign(box.style, { position: "relative", width: "min(440px, 100%)", maxHeight: "calc(100dvh - 32px)", overflow: "auto",
-      borderRadius: "18px", background: "var(--card-background-color, #1c1f26)", color: "var(--primary-text-color, #fff)",
-      boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "44px 8px 8px" });
-    const head = document.createElement("div");
-    Object.assign(head.style, { position: "absolute", top: "0", left: "0", right: "0", height: "40px", display: "flex",
-      alignItems: "center", justifyContent: "space-between", padding: "0 8px 0 16px", font: "600 15px system-ui, sans-serif" });
-    head.textContent = title || "";
+    const piloty = String(cfg.type) === "custom:piloty-card"; // pełny pilot ma najwyżej 440 px szerokości
+    Object.assign(box.style, { position: "relative", width: `min(${piloty ? 440 : 520}px, 100%)`, maxHeight: "100%", overflowY: "auto", overflowX: "hidden",
+      borderRadius: piloty ? "30px" : "18px", boxShadow: "0 10px 40px rgba(0,0,0,0.6)", boxSizing: "border-box", margin: "auto",
+      WebkitOverflowScrolling: "touch" });
     const x = document.createElement("button");
     x.textContent = "✕";
+    x.title = title ? `Zamknij (${title})` : "Zamknij";
     x.setAttribute("aria-label", "Zamknij");
-    Object.assign(x.style, { border: "0", background: "transparent", color: "inherit", fontSize: "20px", cursor: "pointer", padding: "6px 10px" });
-    head.appendChild(x);
-    box.appendChild(head);
+    Object.assign(x.style, { position: "sticky", top: "6px", float: "right", zIndex: "2", margin: "6px 6px -46px 0", width: "40px", height: "40px",
+      border: "0", borderRadius: "50%", background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: "20px", lineHeight: "40px",
+      cursor: "pointer", padding: "0" });
+    box.appendChild(x);
     ov.appendChild(box);
-    const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); this._popupCard = null; };
+    this._popup = ov;
+    const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); this._popupCard = null; this._popup = null; };
     const onKey = (e) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     x.addEventListener("click", (e) => { e.stopPropagation(); close(); });
     const openedAt = Date.now();
     ov.addEventListener("click", (e) => { e.stopPropagation(); if (e.target === ov && Date.now() - openedAt > 400) close(); });
-    this.appendChild(ov);
+    this._popupClose = close;
+    document.body.appendChild(ov);
     try {
       const helpers = await window.loadCardHelpers();
       const card = helpers.createCardElement(cfg);
@@ -2639,6 +2645,7 @@ class HaFloorPlanCard extends HTMLElement {
         this._popupCard = n;
       });
       if (this._hass) card.hass = this._hass;
+      card.style.display = "block";
       box.appendChild(card);
       this._popupCard = card;
     } catch (e) {
