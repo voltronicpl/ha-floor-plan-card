@@ -23,7 +23,7 @@
  * winter_from_nov15: true (domyślnie; zima od 15 listopada, święta od 1 grudnia)
  */
 
-const CARD_VERSION = "1.8.3";
+const CARD_VERSION = "1.8.4";
 
 // Obszary świateł narysowane w edytorze: room_areas: { poziom|pion|szeroki: { salon: [[x%, y%], ...] } }
 function roomPoly(config, orient, rk) {
@@ -980,6 +980,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       winter_from_nov15: c.winter_from_nov15 !== false,
       fullscreen: c.fullscreen !== false,
       corner_card: c.corner_card && typeof c.corner_card === "object" && c.corner_card.type ? c.corner_card : DEFAULT_CORNER_CARD,
+      tv_card: c.tv_card && typeof c.tv_card === "object" ? c.tv_card : undefined,
     };
     for (const k of EDITOR_ROOMS) {
       const r = rooms[k] || {};
@@ -1011,6 +1012,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       { name: "winter_from_nov15", selector: { boolean: {} } },
       { name: "fullscreen", selector: { boolean: {} } },
       { name: "corner_card", selector: { object: {} } },
+      { name: "tv_card", selector: { object: {} } },
       ...EDITOR_ROOMS.map((k) => ({
         type: "expandable", flatten: true, title: ROOMS[k].name, icon: "mdi:floor-plan",
         schema: [
@@ -1028,6 +1030,7 @@ class HaFloorPlanCardEditor extends HTMLElement {
       show_empty_temp: "Pokaż „–” w pokojach bez czujnika temperatury",
       winter_from_nov15: "Zima od 15 listopada", fullscreen: "Pełny ekran",
       corner_card: "Karta w prawym górnym rogu nad domem (YAML, np. type: custom:ems-card; puste = brak)",
+      tv_card: "Pilot po kliknięciu w telewizor: karta pilota z HACS (YAML, np. type: custom:…-remote-card + jej opcje; puste = okno encji)",
     };
     if (labels[n]) return labels[n];
     if (n.endsWith("__light")) return "Światło";
@@ -1055,6 +1058,8 @@ class HaFloorPlanCardEditor extends HTMLElement {
     if (!cc || typeof cc !== "object" || !cc.type) c.corner_card = undefined;
     else if (JSON.stringify(cc) === JSON.stringify(DEFAULT_CORNER_CARD)) c.corner_card = undefined;
     else c.corner_card = cc;
+    const tc = d.tv_card;
+    c.tv_card = tc && typeof tc === "object" && tc.type ? tc : undefined;
     const rooms = {};
     for (const k of EDITOR_ROOMS) {
       const light = d[`${k}__light`] || undefined;
@@ -1909,12 +1914,15 @@ class HaFloorPlanCard extends HTMLElement {
         el.className = "fp-tv";
         el.style.width = `${b.size[0]}%`;
         el.style.height = `${b.size[1]}%`;
-        el.title = b.nav ? `Telewizor – pilot (${b.nav})` : b.entity ? `Telewizor – pilot (${b.entity})` : "Telewizor – wybierz encję pilota w edytorze karty";
+        el.title = this._config.tv_card && this._config.tv_card.type ? `Telewizor – pilot (${this._config.tv_card.type})` : b.nav ? `Telewizor – pilot (${b.nav})` : b.entity ? `Telewizor – pilot (${b.entity})` : "Telewizor – wybierz encję pilota w edytorze karty";
         el.addEventListener("click", (ev) => {
           ev.stopPropagation();
           el.classList.add("hit");
           setTimeout(() => el.classList.remove("hit"), 400);
-          if (b.nav) {
+          const tcard = this._config.tv_card;
+          if (tcard && typeof tcard === "object" && tcard.type) {
+            this._openCardPopup(tcard, "Pilot");
+          } else if (b.nav) {
             history.pushState(null, "", b.nav);
             window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
           } else if (b.entity) {
@@ -2591,6 +2599,56 @@ class HaFloorPlanCard extends HTMLElement {
     box.addEventListener("contextmenu", (e) => { if (pts.size > 1 || Date.now() < suppressUntil) e.preventDefault(); }, true);
   }
 
+  // Dowolna karta HA (np. pilot z HACS) w okienku nad mapą; zamykanie: tło, ✕ albo Esc
+  async _openCardPopup(cfg, title) {
+    if (this.querySelector(".fp-popup")) return;
+    const ov = document.createElement("div");
+    ov.className = "fp-popup";
+    Object.assign(ov.style, { position: "fixed", inset: "0", zIndex: "9", background: "rgba(0,0,0,0.55)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", boxSizing: "border-box" });
+    const box = document.createElement("div");
+    Object.assign(box.style, { position: "relative", width: "min(440px, 100%)", maxHeight: "calc(100dvh - 32px)", overflow: "auto",
+      borderRadius: "18px", background: "var(--card-background-color, #1c1f26)", color: "var(--primary-text-color, #fff)",
+      boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "44px 8px 8px" });
+    const head = document.createElement("div");
+    Object.assign(head.style, { position: "absolute", top: "0", left: "0", right: "0", height: "40px", display: "flex",
+      alignItems: "center", justifyContent: "space-between", padding: "0 8px 0 16px", font: "600 15px system-ui, sans-serif" });
+    head.textContent = title || "";
+    const x = document.createElement("button");
+    x.textContent = "✕";
+    x.setAttribute("aria-label", "Zamknij");
+    Object.assign(x.style, { border: "0", background: "transparent", color: "inherit", fontSize: "20px", cursor: "pointer", padding: "6px 10px" });
+    head.appendChild(x);
+    box.appendChild(head);
+    ov.appendChild(box);
+    const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); this._popupCard = null; };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    x.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+    const openedAt = Date.now();
+    ov.addEventListener("click", (e) => { e.stopPropagation(); if (e.target === ov && Date.now() - openedAt > 400) close(); });
+    this.appendChild(ov);
+    try {
+      const helpers = await window.loadCardHelpers();
+      const card = helpers.createCardElement(cfg);
+      card.addEventListener("ll-rebuild", (ev) => {
+        ev.stopPropagation();
+        const n = helpers.createCardElement(cfg);
+        if (this._hass) n.hass = this._hass;
+        card.replaceWith(n);
+        this._popupCard = n;
+      });
+      if (this._hass) card.hass = this._hass;
+      box.appendChild(card);
+      this._popupCard = card;
+    } catch (e) {
+      const n = document.createElement("div");
+      n.style.padding = "12px";
+      n.textContent = `Nie da się pokazać karty ${cfg.type}: ${(e && e.message) || e}`;
+      box.appendChild(n);
+    }
+  }
+
   // wietrzenie: klik = wciśnij (button/script/scene/switch…), przytrzymanie = szczegóły encji
   _bindVent(el, b) {
     let timer = null;
@@ -2654,6 +2712,7 @@ class HaFloorPlanCard extends HTMLElement {
     this._hass = hass;
     if (this._card) this._card.hass = hass;
     if (this._corner) this._corner.hass = hass;
+    if (this._popupCard) this._popupCard.hass = hass;
     this._updateLayers();
     this._refresh(); // np. zachód słońca -> motyw nocny
   }
